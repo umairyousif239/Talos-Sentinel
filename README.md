@@ -19,6 +19,7 @@ This project in accordance to the completion of my computer science degree at Sh
 - [x] Combine the sensors to send data properly as a CSV.
 - [x] Turn that CSV into a JSON format and then Stream it as an API.
 - [ ] Structure the backend and parse the camera input for the model usage.
+- [ ] combine the camera and sensor data as a proper backend.
 - [ ] Create a front end to show all the sensor data and camera input in a single clean dashboard.
 - [ ] Dockerize the whole project.
 - [ ] Optimize and host the project onto a Raspberry pi 5.
