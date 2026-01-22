@@ -2,6 +2,7 @@ ai_surveillance_system/
 logs/
 datasets/
 __pycache__/
+.venv/
 .fyp_venv/
 fyp_venv/
 models/model_conversion.py
