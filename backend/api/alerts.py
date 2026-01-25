@@ -1,6 +1,6 @@
 import time
 import uuid
-from backend import *
+from backend.modules.alert_config import *
 
 def evaluate_alerts(sensor_data, vision_data):
     """
