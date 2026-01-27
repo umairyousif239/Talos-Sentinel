@@ -1,16 +1,17 @@
-from fastapi import FastAPI
-from pydantic import BaseModel
+from fastapi import APIRouter
+from pydantic import BaseModel, Field
+from typing import List
 
-app = FastAPI(title="AI Surveillance Sensor Frame API")
+router = APIRouter(prefix="/sensors", tags=["Sensors"])
 
 class SensorFrame(BaseModel):
     frame_id: int
     timestamp_ms: int
     flame: int
     mq135_raw: int
-    thermal: list[float]
+    thermal: List[float] = Field(..., min_length=64, max_length=64)
 
-@app.post("/sensor-frame")
+@router.post("/sensor-frame")
 def receive_sensor_frame(frame: SensorFrame):
     print("RECEIVED:", frame.frame_id)
     return {"status": "ok"}

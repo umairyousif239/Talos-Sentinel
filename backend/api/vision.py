@@ -1,6 +1,6 @@
 import cv2
 from ultralytics import YOLO
-from fastapi import FastAPI
+from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 import threading
 import time
@@ -12,16 +12,16 @@ IMG_SIZE = 256
 CONF_THRESH = 0.25
 
 # Webcam + shared frame
-cap = cv2.VideoCapture(0)
-if not cap.isOpened():
-    raise RuntimeError("Cannot open webcam")
-
+cap = None
 frame_lock = threading.Lock()
 output_frame = None
 
 # Threaded capture + inference
 def capture_loop():
-    global output_frame
+    global output_frame, cap
+    cap = cv2.VideoCapture(0)
+    if not cap.isOpened():
+        raise RuntimeError("Cannot open webcam")
     prev_time = time.time()
     while True:
         ret, frame = cap.read()
@@ -76,19 +76,14 @@ async def mjpeg_generator():
         await asyncio.sleep(0.03)
 
 # FastAPI app
-app = FastAPI()
+router = APIRouter(prefix="/vision", tags=["Vision"])
 
-@app.get("/video_feed")
+@router.get("/video_feed")
 async def video_feed():
     return StreamingResponse(mjpeg_generator(),
                              media_type='multipart/x-mixed-replace; boundary=frame')
 
 # Optional health endpoint
-@app.get("/health")
+@router.get("/health")
 async def health():
     return {"status": "ok", "fps": "check visually on /video_feed"}
-
-# Run with uvicorn
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
