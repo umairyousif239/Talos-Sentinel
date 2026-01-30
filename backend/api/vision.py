@@ -7,44 +7,87 @@ import time
 import asyncio
 
 # Load NCNN model
-model = YOLO("models/trained_yolov8n_ncnn_model")  # NCNN model folder
+model = YOLO("models/trained_yolov8n_ncnn_model", task="detect")  # NCNN model folder
 IMG_SIZE = 256
 CONF_THRESH = 0.25
+
+# Global Variables
+latest_detections = None
+frame_id = 0
 
 # Webcam + shared frame
 cap = None
 frame_lock = threading.Lock()
 output_frame = None
 
-# Threaded capture + inference
+# Threaded capture + inference and output then as a proper Json
 def capture_loop():
-    global output_frame, cap
+    global output_frame, cap, latest_detections, frame_id
+
     cap = cv2.VideoCapture(0)
     if not cap.isOpened():
         raise RuntimeError("Cannot open webcam")
+
     prev_time = time.time()
+
     while True:
         ret, frame = cap.read()
         if not ret:
             time.sleep(0.01)
             continue
 
-        # Run NCNN inference
+        detections = []
+
         try:
-            results = model.predict(frame, imgsz=IMG_SIZE, conf=CONF_THRESH, device="cpu")
-            annotated_frame = results[0].plot()
+            results = model.predict(
+                frame,
+                imgsz=IMG_SIZE,
+                conf=CONF_THRESH,
+                device="cpu"
+            )
+
+            r = results[0]
+
+            if r.boxes is not None:
+                for box in r.boxes:
+                    cls_id = int(box.cls[0])
+                    conf = float(box.conf[0])
+                    x1, y1, x2, y2 = map(int, box.xyxy[0])
+
+                    detections.append({
+                        "class": model.names[cls_id],
+                        "confidence": round(conf, 3),
+                        "bbox": [x1, y1, x2, y2]
+                    })
+
+            annotated_frame = r.plot()
+
         except Exception as e:
             print("Inference failed:", e)
             annotated_frame = frame
 
-        # Add FPS overlay
+        frame_id += 1
+
+        latest_detections = {
+            "frame_id": frame_id,
+            "timestamp_ms": int(time.time() * 1000),
+            "detections": detections
+        }
+
         curr_time = time.time()
         fps = 1 / max(curr_time - prev_time, 1e-5)
         prev_time = curr_time
-        cv2.putText(annotated_frame, f"FPS: {fps:.1f}", (10, 30),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
 
-        # Save frame thread-safely
+        cv2.putText(
+            annotated_frame,
+            f"FPS: {fps:.1f}",
+            (10, 30),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.8,
+            (0, 255, 0),
+            2
+        )
+
         with frame_lock:
             output_frame = annotated_frame.copy()
 
@@ -87,3 +130,10 @@ async def video_feed():
 @router.get("/health")
 async def health():
     return {"status": "ok", "fps": "check visually on /video_feed"}
+
+# Expose detections via API
+@router.get("/detections/latest")
+def get_latest_detections():
+    if latest_detections is None:
+        return {"status": "no_detections"}
+    return latest_detections
