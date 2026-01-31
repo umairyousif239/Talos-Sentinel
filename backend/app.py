@@ -1,12 +1,27 @@
 from fastapi import FastAPI
+from contextlib import asynccontextmanager
+
 from backend.api.vision import router as vision_router
 from backend.api.alerts import router as alerts_router
 from backend.api.sensors import router as sensors_router
+from backend.modules.alert_loop import start_alert_loop
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    start_alert_loop()
+    print("✅ Alert evaluation loop started")
+
+    yield  # App runs here
+
+    # Shutdown (optional cleanup)
+    print("🛑 Shutting down backend")
 
 app = FastAPI(
     title="AI Surveillance Backend",
     description="Edge Inference and Streaming",
-    version="0.0.1"
+    version="0.1.0",
+    lifespan=lifespan
 )
 
 # Usage of vision API

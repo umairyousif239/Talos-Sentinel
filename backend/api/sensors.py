@@ -1,8 +1,12 @@
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 from typing import List
+import threading
 
 router = APIRouter(prefix="/sensors", tags=["Sensors"])
+
+latest_frame = None
+lock = threading.Lock()
 
 class SensorFrame(BaseModel):
     frame_id: int
@@ -13,5 +17,14 @@ class SensorFrame(BaseModel):
 
 @router.post("/sensor-frame")
 def receive_sensor_frame(frame: SensorFrame):
-    print("RECEIVED:", frame.frame_id)
+    global latest_frame
+    with lock:
+        latest_frame = frame.dict()
     return {"status": "ok"}
+
+@router.get("/latest")
+def get_latest():
+    with lock:
+        if latest_frame is None:
+            return {"status": "no_data"}
+        return latest_frame

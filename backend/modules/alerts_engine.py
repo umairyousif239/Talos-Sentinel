@@ -1,49 +1,131 @@
 import time
-import uuid
-from backend.modules.alert_config import *
+import requests
 
-def evaluate_alerts(sensor_data, vision_data):
+from backend.modules.alert_config import (
+    VISION_FIRE_CONF,
+    MQ135_SMOKE_RAW,
+    THERMAL_FIRE_TEMP,
+    THERMAL_DELTA,
+    FLAME_DETECTED,
+)
+
+# -----------------------------
+# API endpoints (internal pull)
+# -----------------------------
+VISION_URL = "http://127.0.0.1:8000/vision/detections/latest"
+SENSORS_URL = "http://127.0.0.1:8000/sensors/latest"
+
+REQUEST_TIMEOUT = 0.25  # seconds
+
+
+# -----------------------------
+# Data Fetchers
+# -----------------------------
+def fetch_latest_vision():
+    try:
+        resp = requests.get(VISION_URL, timeout=REQUEST_TIMEOUT)
+        if resp.status_code == 200:
+            data = resp.json()
+            if "detections" in data:
+                return data
+    except Exception:
+        pass
+    return None
+
+
+def fetch_latest_sensors():
+    try:
+        resp = requests.get(SENSORS_URL, timeout=REQUEST_TIMEOUT)
+        if resp.status_code == 200:
+            data = resp.json()
+            if "thermal" in data:
+                return data
+    except Exception:
+        pass
+    return None
+
+
+# -----------------------------
+# Alert Evaluation
+# -----------------------------
+def evaluate_alerts():
     """
-    sensor_data:
-      flame, mq135_raw, thermal_pixels
-
-    vision_data:
-      fire_conf, smoke_conf
+    Pulls latest vision + sensor data
+    Evaluates alert conditions
+    Returns alert dict or None
     """
 
-    triggers = []
-    confidence = 0.0
+    vision = fetch_latest_vision()
+    sensors = fetch_latest_sensors()
 
-    # ---- Vision ----
-    if vision_data.get("fire_conf", 0) > VISION_FIRE_CONF:
-        triggers.append("vision")
-        confidence += vision_data["fire_conf"]
+    if not vision or not sensors:
+        return None
 
-    # ---- Flame IR ----
-    if sensor_data["flame"] == FLAME_DETECTED:
-        triggers.append("flame")
-        confidence += 0.4
+    # -----------------------------
+    # Extract sensor values
+    # -----------------------------
+    detections = vision.get("detections", [])
+    flame = sensors.get("flame", 0)
+    mq135 = sensors.get("mq135_raw", 0)
+    thermal = sensors.get("thermal", [])
 
-    # ---- Gas ----
-    if sensor_data["mq135_raw"] > MQ135_SMOKE_RAW:
-        triggers.append("gas")
-        confidence += 0.3
+    if not thermal:
+        return None
 
-    # ---- Thermal ----
-    thermal = sensor_data["thermal"]
-    if max(thermal) > THERMAL_FIRE_TEMP:
-        triggers.append("thermal")
-        confidence += 0.4
+    # -----------------------------
+    # Derived thermal signals
+    # -----------------------------
+    max_temp = max(thermal)
+    min_temp = min(thermal)
+    delta_temp = max_temp - min_temp
 
-    if len(triggers) >= 2:
+    # -----------------------------
+    # Vision signals
+    # -----------------------------
+    fire_detected = any(
+        d["class"] == "fire" and d["confidence"] >= VISION_FIRE_CONF
+        for d in detections
+    )
+
+    # -----------------------------
+    # Sensor signals
+    # -----------------------------
+    smoke_detected = mq135 >= MQ135_SMOKE_RAW
+    flame_detected = flame == FLAME_DETECTED
+    thermal_fire = max_temp >= THERMAL_FIRE_TEMP
+    thermal_spike = delta_temp >= THERMAL_DELTA
+
+    timestamp_ms = int(time.time() * 1000)
+
+    # -----------------------------
+    # Alert decision matrix
+    # -----------------------------
+    if fire_detected and (smoke_detected or flame_detected or thermal_fire):
         return {
-            "alert_id": str(uuid.uuid4()),
-            "timestamp": time.time(),
-            "type": "FIRE",
-            "severity": "HIGH" if confidence > 1.2 else "MEDIUM",
-            "confidence": round(min(confidence, 1.0), 2),
-            "sources": triggers,
-            "frame_id": sensor_data["frame_id"]
+            "type": "FIRE_ALERT",
+            "severity": "HIGH",
+            "timestamp_ms": timestamp_ms,
+            "signals": {
+                "vision_fire": fire_detected,
+                "smoke": smoke_detected,
+                "flame": flame_detected,
+                "max_temp": round(max_temp, 1),
+                "delta_temp": round(delta_temp, 1),
+                "mq135_raw": mq135,
+            }
+        }
+
+    if smoke_detected and thermal_spike:
+        return {
+            "type": "SMOKE_ALERT",
+            "severity": "MEDIUM",
+            "timestamp_ms": timestamp_ms,
+            "signals": {
+                "smoke": smoke_detected,
+                "max_temp": round(max_temp, 1),
+                "delta_temp": round(delta_temp, 1),
+                "mq135_raw": mq135,
+            }
         }
 
     return None
