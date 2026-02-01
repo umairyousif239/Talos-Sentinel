@@ -1,6 +1,6 @@
 import time
 import requests
-import enum as Enum
+from enum import Enum
 from typing import Optional
 
 from backend.modules.alert_config import (
