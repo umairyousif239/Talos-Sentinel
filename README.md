@@ -1,6 +1,6 @@
-# AI Survellance System Powered By ESP32 and Pi 5 For FYP
+# AI Surveillance System Powered By ESP32 and Pi 5 For FYP
 
-This project in accordance to the completion of my computer science degree at Shah Abdul Latif University, Khairpur. This project is based on the YOLOv8 model combined with sensors like AMG8833, Flame IR Sensor and MQ-135 for the detection of threats, Smoke, Fire and Weapons. Furthermore, This project will be optimized to run on a Raspberry Pi 5 to serve as personal surveillance system.
+This project is made in accordance to the completion of my computer science degree at Shah Abdul Latif University, Khairpur. This project is based on the YOLOv8 model combined with sensors like AMG8833, Flame IR Sensor and MQ-135 for the detection of threats, Smoke, Fire and Weapons. Furthermore, This project will be optimized to run on a Raspberry Pi 5 to serve as personal surveillance system.
 
 ## File Structure:
 ```/Models```: houses all the trained models (both pytorch versions and the ONNX versions).
@@ -41,6 +41,8 @@ This project in accordance to the completion of my computer science degree at Sh
 │   │   └── serial_bridge.py
 │   ├── modules
 │   │   ├── alert_config.py
+│   │   ├── alert_loop.py
+│   │   ├── alert_state.py
 │   │   └── alerts_engine.py
 │   ├── app.py
 │   └── dummy_data.py
