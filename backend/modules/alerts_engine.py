@@ -53,8 +53,16 @@ def fetch_latest_sensors():
     return None
 
 # Scoring Functions
-def compute_confidence(fire, smoke, flame, thermal_fire, thermal_spike):
+def compute_confidence(
+    fire: bool,
+    smoke: bool,
+    flame: bool,
+    thermal_fire: bool,
+    thermal_spike: bool
+) -> float:
+    
     score = 0.0
+    
     if fire:
         score += 0.4
     if smoke:
@@ -116,6 +124,15 @@ def evaluate_alerts() -> Optional[dict]:
     thermal_fire = max_temp >= THERMAL_FIRE_TEMP
     thermal_spike = delta_temp >= THERMAL_DELTA
     
+    if fire_detected and (smoke_detected or flame_detected or thermal_fire):
+        source = "FUSED"
+    elif fire_detected:
+        source = "VISION_ONLY"
+    elif smoke_detected or flame_detected or thermal_fire:
+        source = "SENSOR_ONLY"
+    else:
+        source = "UNKNOWN"
+    
     # Decision Gate
     trigger = (
         fire_detected and (smoke_detected or flame_detected or thermal_fire)
@@ -150,6 +167,7 @@ def evaluate_alerts() -> Optional[dict]:
         current_alert = {
             "id": f"alert_{int(now)}",
             "type": "FIRE" if fire_detected else "SMOKE",
+            "source": source,
             "status": AlertStatus.NEW,
             "severity": severity,
             "confidence": confidence,

@@ -6,6 +6,8 @@ from backend.modules.alerts_engine import evaluate_alerts
 latest_alert = None
 last_alert_signature = None
 last_alert_time = 0
+alert_history = []
+MAX_ALERT_HISTORY = 100
 
 ALERT_COOLDOWN_SEC = 10
 
@@ -32,8 +34,13 @@ async def alert_loop():
                     latest_alert = alert
                     last_alert_signature = signature
                     last_alert_time = now
+
+                    # ✅ Alert history tracking
+                    alert_history.append(alert.copy())
+                    alert_history[:] = alert_history[-MAX_ALERT_HISTORY:]
                     
                     print("ALERT!: ", alert)
+
         except Exception as e:
             print("Alert Loop Error: ", e)
         
