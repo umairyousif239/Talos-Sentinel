@@ -5,7 +5,9 @@ from typing import Optional
 DB_PATH = "backend/database/alerts.db"
 
 def get_connection():
-    return sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    return conn
 
 def init_db():
     conn = get_connection()
@@ -65,22 +67,22 @@ def upsert_alert(alert: dict):
 def load_active_alert() -> Optional[dict]:
     conn = get_connection()
     cur = conn.cursor()
-    
+
     cur.execute("""
-    SELECT id, type, source, severity, confidence,
-           status, created_at, updated_at, resolved_at, signals
-    FROM alerts
-    WHERE status IN ('NEW', 'ACTIVE')
-    ORDER BY created_at DESC
-    LIMIT 1
+        SELECT id, type, source, severity, confidence,
+               status, created_at, updated_at, resolved_at, signals
+        FROM alerts
+        WHERE status IN ('NEW', 'ACTIVE')
+        ORDER BY created_at DESC
+        LIMIT 1
     """)
-    
+
     row = cur.fetchone()
     conn.close()
-    
+
     if not row:
         return None
-    
+
     return {
         "id": row[0],
         "type": row[1],
@@ -93,3 +95,65 @@ def load_active_alert() -> Optional[dict]:
         "resolved_at": row[8],
         "signals": json.loads(row[9]),
     }
+
+def fetch_latest_alert() -> Optional[dict]:
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT id, type, source, severity, confidence,
+               status, created_at, updated_at, resolved_at, signals
+        FROM alerts
+        ORDER BY created_at DESC
+        LIMIT 1
+    """)
+
+    row = cur.fetchone()
+    conn.close()
+
+    if not row:
+        return None
+
+    return {
+        "id": row[0],
+        "type": row[1],
+        "source": row[2],
+        "severity": row[3],
+        "confidence": row[4],
+        "status": row[5],
+        "created_at": row[6],
+        "updated_at": row[7],
+        "resolved_at": row[8],
+        "signals": json.loads(row[9]),
+    }
+
+def fetch_alert_history(limit: int = 100):
+    conn = get_connection()
+    cur = conn.cursor()
+    
+    cur.execute("""
+        SELECT id, type, source, severity, confidence,
+               status, created_at, updated_at, resolved_at, signals
+        FROM alerts
+        ORDER BY created_at DESC
+        limit ?
+    """, (limit, ))
+    
+    rows = cur.fetchall()
+    conn.close()
+    
+    return [
+        {
+            "id": r[0],
+            "type": r[1],
+            "source": r[2],
+            "severity": r[3],
+            "confidence": r[4],
+            "status": r[5],
+            "created_at": r[6],
+            "updated_at": r[7],
+            "resolved_at": r[8],
+            "signals": json.loads(r[9]),
+        }
+        for r in rows
+    ]
