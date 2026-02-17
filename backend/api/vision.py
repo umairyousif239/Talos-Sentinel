@@ -134,7 +134,7 @@ async def health():
     return {"status": "ok", "fps": "check visually on /video_feed"}
 
 # Expose detections via API
-@router.get("/detections/latest")
+@router.get("/latest")
 def get_latest_detections():
     with detections_lock:
         if latest_detections is None:

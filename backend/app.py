@@ -6,6 +6,7 @@ from backend.api.vision import router as vision_router
 from backend.api.alerts import router as alerts_router
 from backend.api.sensors import router as sensors_router
 from backend.modules.alert_loop import alert_loop
+from fastapi.middleware.cors import CORSMiddleware
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -25,6 +26,18 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan
 )
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 # Usage of vision API
 app.include_router(vision_router)
