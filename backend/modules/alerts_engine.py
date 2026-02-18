@@ -12,7 +12,7 @@ from backend.modules.alert_config import (
 )
 
 # Internal API Endpoints
-VISION_URL = "http://127.0.0.1:8000/vision/detections/latest"
+VISION_URL = "http://127.0.0.1:8000/vision/latest"
 SENSORS_URL = "http://127.0.0.1:8000/sensors/latest"
 REQUEST_TIMEOUT = 0.25
 
@@ -89,41 +89,48 @@ def evaluate_alerts() -> Optional[dict]:
     Evaluates alert conditions
     Manages alert lifecycle
     """
-    
+
     global current_alert, last_trigger_time
-    
+
     vision = fetch_latest_vision()
     sensors = fetch_latest_sensors()
-    
+
     now = time.time()
     timestamp_ms = int(now * 1000)
-    
+
     if not vision or not sensors:
         return None
-    
-    detections = vision.get("detections", [])
+
+    # -----------------------------
+    # Vision Parsing (FIXED)
+    # -----------------------------
+    fire_detected = (
+        vision.get("detected", False)
+        and vision.get("confidence", 0) >= VISION_FIRE_CONF
+    )
+
+    # -----------------------------
+    # Sensor Parsing
+    # -----------------------------
     flame = sensors.get("flame", 0)
     mq135 = sensors.get("mq135_raw", 0)
     thermal = sensors.get("thermal", [])
-    
+
     if not thermal:
         return None
-    
+
     max_temp = max(thermal)
     min_temp = min(thermal)
     delta_temp = max_temp - min_temp
-    
-    # Signal Extraction
-    fire_detected = any(
-        d["class"] == "fire" and d["confidence"] >= VISION_FIRE_CONF
-        for d in detections
-    )
-    
+
     smoke_detected = mq135 >= MQ135_SMOKE_RAW
     flame_detected = flame == FLAME_DETECTED
     thermal_fire = max_temp >= THERMAL_FIRE_TEMP
     thermal_spike = delta_temp >= THERMAL_DELTA
-    
+
+    # -----------------------------
+    # Source Labeling
+    # -----------------------------
     if fire_detected and (smoke_detected or flame_detected or thermal_fire):
         source = "FUSED"
     elif fire_detected:
@@ -132,16 +139,20 @@ def evaluate_alerts() -> Optional[dict]:
         source = "SENSOR_ONLY"
     else:
         source = "UNKNOWN"
-    
-    # Decision Gate
+
+    # -----------------------------
+    # Trigger Logic
+    # -----------------------------
     trigger = (
         fire_detected and (smoke_detected or flame_detected or thermal_fire)
     ) or (
         smoke_detected and thermal_spike
     )
-    
+
+    # -----------------------------
+    # No Trigger → Possibly Resolve
+    # -----------------------------
     if not trigger:
-        # Resolve Logic
         if current_alert and (now - last_trigger_time) > RESOLVE_TIMEOUT:
             current_alert["status"] = AlertStatus.RESOLVED
             current_alert["resolved_at"] = timestamp_ms
@@ -149,9 +160,10 @@ def evaluate_alerts() -> Optional[dict]:
             current_alert = None
             return resolved
         return None
-    
-    last_trigger_time = now
-    
+
+    # -----------------------------
+    # Trigger Active
+    # -----------------------------
     confidence = compute_confidence(
         fire_detected,
         smoke_detected,
@@ -159,10 +171,12 @@ def evaluate_alerts() -> Optional[dict]:
         thermal_fire,
         thermal_spike,
     )
-    
+
     severity = compute_severity(confidence)
-    
-    # Alert or Update Alerts
+
+    # -----------------------------
+    # Create New Alert
+    # -----------------------------
     if current_alert is None:
         current_alert = {
             "id": f"alert_{int(now)}",
@@ -181,18 +195,29 @@ def evaluate_alerts() -> Optional[dict]:
                 "mq135_raw": mq135,
             },
         }
+
+        # Start persistence timer properly
+        last_trigger_time = now
+
         return current_alert
-    
-    # Promoting NEW alert to ACTIVE alert if it fulfills the persistence time
+
+    # -----------------------------
+    # Update Existing Alert
+    # -----------------------------
+
+    # Promote NEW → ACTIVE after persistence window
     if current_alert["status"] == AlertStatus.NEW:
         if (now - last_trigger_time) >= PERSISTENCE_SECONDS:
             current_alert["status"] = AlertStatus.ACTIVE
-    
-    # Update the running alerts
+
+    # Update running alert
     current_alert.update({
         "severity": severity,
         "confidence": confidence,
         "updated_at": timestamp_ms,
     })
-    
+
+    # Keep refreshing trigger timer while active
+    last_trigger_time = now
+
     return current_alert

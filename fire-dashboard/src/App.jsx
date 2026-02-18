@@ -54,30 +54,84 @@ function ThermalGrid({ data }) {
     return <p>No thermal data</p>;
   }
 
-  const min = Math.min(...data);
-  const max = Math.max(...data);
+  // 🔥 Fixed temperature scale
+  const MIN_TEMP = 20;   // lowest expected ambient
+  const MAX_TEMP = 50;   // fire-relevant upper bound
+
+  const clamp = (val, min, max) => Math.min(Math.max(val, min), max);
 
   const normalize = (value) => {
-    return (value - min) / (max - min || 1);
+    const clamped = clamp(value, MIN_TEMP, MAX_TEMP);
+    return (clamped - MIN_TEMP) / (MAX_TEMP - MIN_TEMP);
   };
 
   return (
-    <div className="w-64 h-64 grid grid-cols-8 rounded-lg overflow-hidden">
-      {data.map((value, i) => {
-        const intensity = normalize(value);
-        const red = Math.floor(255 * intensity);
-        const blue = Math.floor(255 * (1 - intensity));
+    <div className="flex items-start gap-6">
 
-        return (
-          <div
-            key={i}
-            className="w-full h-full"
-            style={{
-              backgroundColor: `rgb(${red},0,${blue})`
-            }}
-          />
-        );
-      })}
+      {/* 8x8 Thermal Grid */}
+      <div className="w-64 h-64 grid grid-cols-8 rounded-lg overflow-hidden shadow-inner">
+        {data.map((value, i) => {
+          const intensity = normalize(value);
+          const red = Math.floor(255 * intensity);
+          const blue = Math.floor(255 * (1 - intensity));
+
+          return (
+            <div
+              key={i}
+              className="w-full h-full"
+              style={{
+                backgroundColor: `rgb(${red},0,${blue})`
+              }}
+            />
+          );
+        })}
+      </div>
+
+      {/* Fixed Scale Legend */}
+      <div className="flex flex-col items-center h-64 justify-between">
+
+        {/* Max */}
+        <span className="text-sm text-gray-300">
+          {MAX_TEMP}°C
+        </span>
+
+        {/* Gradient */}
+        <div
+          className="w-6 flex-1 my-2 rounded-md"
+          style={{
+            background: "linear-gradient(to top, blue, cyan, yellow, red)"
+          }}
+        />
+
+        {/* Min */}
+        <span className="text-sm text-gray-300">
+          {MIN_TEMP}°C
+        </span>
+
+      </div>
+    </div>
+  );
+}
+
+
+/* ================= CONFIDENCE BAR ================= */
+
+function ConfidenceBar({ value }) {
+  const percentage = Math.min(Math.max(value * 100, 0), 100);
+
+  return (
+    <div className="w-full">
+      <div className="flex justify-between text-sm mb-1">
+        <span>Confidence</span>
+        <span>{percentage.toFixed(1)}%</span>
+      </div>
+
+      <div className="w-full h-3 bg-gray-700 rounded-full overflow-hidden">
+        <div
+          className="h-full bg-gradient-to-r from-blue-500 via-yellow-400 to-red-500 transition-all duration-300"
+          style={{ width: `${percentage}%` }}
+        />
+      </div>
     </div>
   );
 }
@@ -127,10 +181,9 @@ export default function App() {
         🔥 AI Fire and Smoke Surveillance System
       </h1>
 
-      {/* ================= NEW GRID LAYOUT ================= */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
-        {/* ========== LIVE CAMERA (LEFT SIDE, 2 ROWS) ========== */}
+        {/* LIVE CAMERA */}
         <Card
           title="Live Camera"
           className="lg:col-span-2 lg:row-span-2"
@@ -142,18 +195,16 @@ export default function App() {
           />
         </Card>
 
-        {/* ========== THERMAL (TOP RIGHT) ========== */}
+        {/* THERMAL WITH LEGEND */}
         <Card title="Thermal Camera (8x8)">
           {sensor?.thermal ? (
-            <div className="flex justify-center">
-              <ThermalGrid data={sensor.thermal} />
-            </div>
+            <ThermalGrid data={sensor.thermal} />
           ) : (
             <p>No thermal data</p>
           )}
         </Card>
 
-        {/* ========== VISION (BOTTOM RIGHT) ========== */}
+        {/* VISION WITH CONFIDENCE BAR */}
         <Card
           title="Vision AI"
           className={
@@ -163,7 +214,8 @@ export default function App() {
           }
         >
           {vision ? (
-            <div className="space-y-3">
+            <div className="space-y-4">
+
               <p className="text-lg">
                 Fire Detected:{" "}
                 <span className={fireActive ? "text-red-400 font-bold" : ""}>
@@ -171,48 +223,20 @@ export default function App() {
                 </span>
               </p>
 
-              <p>
-                Confidence:{" "}
-                {vision.confidence
-                  ? vision.confidence.toFixed(3)
-                  : "0.000"}
-              </p>
+              <ConfidenceBar value={vision.confidence || 0} />
 
               <p>
                 Updated:{" "}
                 <Freshness timestamp={vision.timestamp} />
               </p>
+
             </div>
           ) : (
             <p>No vision data</p>
           )}
         </Card>
 
-        {/* ========== SENSORS ========== */}
-        <Card title="Sensors">
-          {sensor ? (
-            <div className="space-y-3">
-              <p>
-                Flame: {sensor.flame ? "🔥 DETECTED" : "No flame"}
-              </p>
-              <p>MQ135: {sensor.mq135_raw}</p>
-              <p>
-                Thermal Max:{" "}
-                {sensor.thermal
-                  ? Math.max(...sensor.thermal).toFixed(2)
-                  : "N/A"}
-              </p>
-              <p>
-                Updated:{" "}
-                <Freshness timestamp={sensor.timestamp} />
-              </p>
-            </div>
-          ) : (
-            <p>No sensor data</p>
-          )}
-        </Card>
-
-        {/* ========== CURRENT ALERT ========== */}
+        {/* CURRENT ALERT */}
         <Card
           title="Current Alert"
           className={
@@ -237,7 +261,7 @@ export default function App() {
           )}
         </Card>
 
-        {/* ========== ALERT HISTORY ========== */}
+        {/* ALERT HISTORY */}
         <Card title="Alert History">
           {history.length > 0 ? (
             <ul className="space-y-2 text-sm">
@@ -252,6 +276,30 @@ export default function App() {
             </ul>
           ) : (
             <p>No alerts yet</p>
+          )}
+        </Card>
+
+        {/* SENSORS */}
+        <Card title="Sensors">
+          {sensor ? (
+            <div className="space-y-3">
+              <p>
+                Flame: {sensor.flame ? "🔥 DETECTED" : "No flame"}
+              </p>
+              <p>MQ135: {sensor.mq135_raw}</p>
+              <p>
+                Thermal Max:{" "}
+                {sensor.thermal
+                  ? Math.max(...sensor.thermal).toFixed(2)
+                  : "N/A"}
+              </p>
+              <p>
+                Updated:{" "}
+                <Freshness timestamp={sensor.timestamp} />
+              </p>
+            </div>
+          ) : (
+            <p>No sensor data</p>
           )}
         </Card>
 
