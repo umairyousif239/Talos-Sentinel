@@ -2,14 +2,22 @@ import { useEffect, useState } from "react";
 
 const API = "http://127.0.0.1:8000";
 
-function Card({ title, children }) {
+/* ================= CARD COMPONENT ================= */
+
+function Card({ title, children, className = "" }) {
   return (
-    <div className="bg-gray-800 rounded-xl p-5 shadow-lg">
-      <h2 className="text-lg font-semibold mb-3 text-gray-200">{title}</h2>
+    <div
+      className={`bg-gray-800 rounded-2xl p-6 shadow-xl border border-gray-700 ${className}`}
+    >
+      <h2 className="text-lg font-semibold mb-4 text-gray-200">
+        {title}
+      </h2>
       {children}
     </div>
   );
 }
+
+/* ================= DATA FRESHNESS INDICATOR ================= */
 
 function Freshness({ timestamp }) {
   const [age, setAge] = useState(0);
@@ -33,11 +41,48 @@ function Freshness({ timestamp }) {
   else if (age < 5000) color = "text-yellow-400";
 
   return (
-    <span className={`${color}`}>
+    <span className={`${color} font-medium`}>
       ● {Math.round(age / 1000)}s
     </span>
   );
 }
+
+/* ================= THERMAL GRID ================= */
+
+function ThermalGrid({ data }) {
+  if (!data || data.length !== 64) {
+    return <p>No thermal data</p>;
+  }
+
+  const min = Math.min(...data);
+  const max = Math.max(...data);
+
+  const normalize = (value) => {
+    return (value - min) / (max - min || 1);
+  };
+
+  return (
+    <div className="w-64 h-64 grid grid-cols-8 rounded-lg overflow-hidden">
+      {data.map((value, i) => {
+        const intensity = normalize(value);
+        const red = Math.floor(255 * intensity);
+        const blue = Math.floor(255 * (1 - intensity));
+
+        return (
+          <div
+            key={i}
+            className="w-full h-full"
+            style={{
+              backgroundColor: `rgb(${red},0,${blue})`
+            }}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+/* ================= MAIN APP ================= */
 
 export default function App() {
   const [sensor, setSensor] = useState(null);
@@ -73,43 +118,54 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
+  const fireActive = vision?.detected;
+  const alertActive = alert && alert.status !== "NO_ALERT";
+
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100 p-8">
-      <h1 className="text-3xl font-bold mb-8">🔥 Fire Detection Dashboard</h1>
+      <h1 className="text-3xl font-bold mb-10">
+        🔥 AI Fire and Smoke Surveillence System
+      </h1>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
-        {/* Sensors */}
-        <Card title="Sensors">
-          {sensor ? (
-            <div className="space-y-2">
-              <p>Flame: {sensor.flame ? "🔥 DETECTED" : "No flame"}</p>
-              <p>MQ135: {sensor.mq135_raw}</p>
-              <p>
-                Thermal Max:{" "}
-                {sensor.thermal
-                  ? Math.max(...sensor.thermal).toFixed(2)
-                  : "N/A"}
-              </p>
-              <p>
-                Updated: <Freshness timestamp={sensor.timestamp} />
-              </p>
-            </div>
-          ) : (
-            <p>No sensor data</p>
-          )}
+        {/* ================= LIVE CAMERA (BIG) ================= */}
+        <Card title="Live Camera" className="lg:col-span-2">
+          <img
+            src={`${API}/vision/video_feed`}
+            alt="Live Feed"
+            className="rounded-xl w-full border border-gray-700"
+          />
         </Card>
 
-        {/* Vision */}
-        <Card title="Vision">
+        {/* ================= VISION ================= */}
+        <Card
+          title="Vision AI"
+          className={
+            fireActive
+              ? "border-2 border-red-500 shadow-red-500/30"
+              : ""
+          }
+        >
           {vision ? (
-            <div className="space-y-2">
-              <p>
-                Fire Detected: {vision.detected ? "🔥 YES" : "No"}
+            <div className="space-y-3">
+              <p className="text-lg">
+                Fire Detected:{" "}
+                <span className={fireActive ? "text-red-400 font-bold" : ""}>
+                  {fireActive ? "🔥 YES" : "No"}
+                </span>
               </p>
-              <p>Confidence: {vision.confidence}</p>
+
               <p>
-                Updated: <Freshness timestamp={vision.timestamp} />
+                Confidence:{" "}
+                {vision.confidence
+                  ? vision.confidence.toFixed(3)
+                  : "0.000"}
+              </p>
+
+              <p>
+                Updated:{" "}
+                <Freshness timestamp={vision.timestamp} />
               </p>
             </div>
           ) : (
@@ -117,16 +173,63 @@ export default function App() {
           )}
         </Card>
 
-        {/* Current Alert */}
-        <Card title="Current Alert">
-          {alert && alert.status !== "NO_ALERT" ? (
-            <div className="space-y-2">
+        {/* ================= THERMAL ================= */}
+        <Card title="Thermal Camera (8x8)">
+          {sensor?.thermal ? (
+            <div className="flex justify-center">
+              <ThermalGrid data={sensor.thermal} />
+            </div>
+          ) : (
+            <p>No thermal data</p>
+          )}
+        </Card>
+
+        {/* ================= SENSORS ================= */}
+        <Card title="Sensors">
+          {sensor ? (
+            <div className="space-y-3">
+              <p>
+                Flame:{" "}
+                {sensor.flame ? "🔥 DETECTED" : "No flame"}
+              </p>
+
+              <p>MQ135: {sensor.mq135_raw}</p>
+
+              <p>
+                Thermal Max:{" "}
+                {sensor.thermal
+                  ? Math.max(...sensor.thermal).toFixed(2)
+                  : "N/A"}
+              </p>
+
+              <p>
+                Updated:{" "}
+                <Freshness timestamp={sensor.timestamp} />
+              </p>
+            </div>
+          ) : (
+            <p>No sensor data</p>
+          )}
+        </Card>
+
+        {/* ================= CURRENT ALERT ================= */}
+        <Card
+          title="Current Alert"
+          className={
+            alertActive
+              ? "border-2 border-red-600 animate-pulse"
+              : ""
+          }
+        >
+          {alertActive ? (
+            <div className="space-y-3">
               <p>Status: {alert.status}</p>
               <p>Type: {alert.type}</p>
               <p>Source: {alert.source}</p>
               <p>Confidence: {alert.confidence}</p>
               <p>
-                Updated: <Freshness timestamp={alert.updated_at} />
+                Updated:{" "}
+                <Freshness timestamp={alert.updated_at} />
               </p>
             </div>
           ) : (
@@ -134,12 +237,15 @@ export default function App() {
           )}
         </Card>
 
-        {/* Alert History */}
+        {/* ================= ALERT HISTORY ================= */}
         <Card title="Alert History">
           {history.length > 0 ? (
-            <ul className="space-y-1 text-sm">
+            <ul className="space-y-2 text-sm">
               {history.slice(0, 5).map((a, i) => (
-                <li key={i} className="border-b border-gray-700 pb-1">
+                <li
+                  key={i}
+                  className="border-b border-gray-700 pb-2"
+                >
                   {a.type} | {a.status}
                 </li>
               ))}
