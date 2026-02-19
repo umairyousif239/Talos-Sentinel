@@ -20,7 +20,7 @@ last_alert_time = 0
 alert_history = []
 MAX_ALERT_HISTORY = 100
 
-ALERT_COOLDOWN_SEC = 10
+ALERT_COOLDOWN_SEC = 5
 
 async def alert_loop():
     global latest_alert, last_alert_signature, last_alert_time
@@ -30,6 +30,10 @@ async def alert_loop():
             alert = evaluate_alerts()
             
             if alert:
+                # 1. ALWAYS save to the database immediately!
+                # This guarantees NEW, ACTIVE, and RESOLVED hit the frontend instantly.
+                upsert_alert(alert)
+                
                 signature = (
                     alert["type"],
                     alert.get("source"),
@@ -37,7 +41,7 @@ async def alert_loop():
                 
                 now = time.time()
                 
-                # Deduplicate and Cool down
+                # 2. Keep the cooldown strictly for tracking the history array
                 if (
                     signature != last_alert_signature
                     or (now - last_alert_time) > ALERT_COOLDOWN_SEC
@@ -50,10 +54,7 @@ async def alert_loop():
                     alert_history.append(copy.deepcopy(alert))
                     alert_history[:] = alert_history[-MAX_ALERT_HISTORY:]
                     
-                    # Database Mirror
-                    upsert_alert(alert)
-                    
-                    print("ALERT!: ", alert)
+                    print("ALERT LOGGED TO HISTORY: ", alert)
 
         except Exception as e:
             print("Alert Loop Error: ", e)

@@ -3,6 +3,11 @@ import requests
 from enum import Enum
 from typing import Optional
 
+from backend.api.vision import get_latest as fetch_latest_vision
+from backend.api.sensors import get_latest as fetch_latest_sensors
+
+from backend.modules.alert_state import AlertStatus, AlertSeverity
+
 from backend.modules.alert_config import (
     VISION_FIRE_CONF,
     MQ135_SMOKE_RAW,
@@ -11,46 +16,11 @@ from backend.modules.alert_config import (
     FLAME_DETECTED
 )
 
-# Internal API Endpoints
-VISION_URL = "http://127.0.0.1:8000/vision/latest"
-SENSORS_URL = "http://127.0.0.1:8000/sensors/latest"
-REQUEST_TIMEOUT = 0.25
-
-#Alert State & Severity
-class AlertSeverity(str, Enum):
-    LOW = "LOW"
-    MEDIUM = "MEDIUM"
-    HIGH = "HIGH"
-
-class AlertStatus(str, Enum):
-    NEW = "NEW"
-    ACTIVE = "ACTIVE"
-    RESOLVED = "RESOLVED"
-
 # Global Alert Memory
 current_alert = None
 last_trigger_time = 0
 PERSISTENCE_SECONDS = 5 #Alert must persist to ensure its not a false positive
 RESOLVE_TIMEOUT = 10 # Seconds without trigger results in resolved status
-
-# Data Fetching
-def fetch_latest_vision():
-    try:
-        r = requests.get(VISION_URL, timeout=REQUEST_TIMEOUT)
-        if r.status_code == 200:
-            return r.json()
-    except Exception:
-        pass
-    return None
-
-def fetch_latest_sensors():
-    try:
-        r = requests.get(SENSORS_URL, timeout=REQUEST_TIMEOUT)
-        if r.status_code == 200:
-            return r.json()
-    except Exception:
-        pass
-    return None
 
 # Scoring Functions
 def compute_confidence(
@@ -147,6 +117,8 @@ def evaluate_alerts() -> Optional[dict]:
         fire_detected and (smoke_detected or flame_detected or thermal_fire)
     ) or (
         smoke_detected and thermal_spike
+    ) or (
+        smoke_detected
     )
 
     # -----------------------------
@@ -206,8 +178,10 @@ def evaluate_alerts() -> Optional[dict]:
     # -----------------------------
 
     # Promote NEW → ACTIVE after persistence window
+# Promote NEW → ACTIVE after persistence window
     if current_alert["status"] == AlertStatus.NEW:
-        if (now - last_trigger_time) >= PERSISTENCE_SECONDS:
+        created_time_sec = current_alert["created_at"] / 1000.0
+        if (now - created_time_sec) >= PERSISTENCE_SECONDS:
             current_alert["status"] = AlertStatus.ACTIVE
 
     # Update running alert

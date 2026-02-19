@@ -173,7 +173,7 @@ export default function App() {
   }, []);
 
   const fireActive = vision?.detected;
-  const alertActive = alert && alert.status !== "NO_ALERT";
+  const alertActive = alert && (alert.status === "NEW" || alert.status === "ACTIVE" || alert.status === "AlertStatus.NEW" || alert.status === "AlertStatus.ACTIVE");
 
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100 p-8">
@@ -247,17 +247,48 @@ export default function App() {
         >
           {alertActive ? (
             <div className="space-y-3">
-              <p>Status: {alert.status}</p>
-              <p>Type: {alert.type}</p>
-              <p>Source: {alert.source}</p>
-              <p>Confidence: {alert.confidence}</p>
-              <p>
-                Updated:{" "}
-                <Freshness timestamp={alert.updated_at} />
-              </p>
+              <div className="flex justify-between items-center">
+                <p>Status: <span className="font-bold text-red-400">{alert.status}</span></p>
+                {/* 1. SEVERITY BADGE */}
+                {alert.severity && (
+                  <span className={`text-xs px-2 py-1 rounded font-bold ${
+                    alert.severity === 'HIGH' ? 'bg-red-900 text-red-200' : 
+                    alert.severity === 'MEDIUM' ? 'bg-yellow-900 text-yellow-200' : 
+                    'bg-blue-900 text-blue-200'
+                  }`}>
+                    {alert.severity} SEVERITY
+                  </span>
+                )}
+              </div>
+              
+              <p>Type: <span className="font-semibold">{alert.type}</span></p>
+              
+              <div className="flex justify-between items-center">
+                <p>Confidence: {alert.confidence}</p>
+                <p className="text-sm">
+                  Updated: <Freshness timestamp={alert.updated_at} />
+                </p>
+              </div>
+
+              {/* 2. ACTIVE TRIGGERS (Optional detail block) */}
+              {alert.signals && (
+                <div className="mt-4 pt-3 border-t border-gray-700 text-sm">
+                  <p className="text-gray-400 mb-1">Active Triggers:</p>
+                  <div className="flex flex-wrap gap-2 text-xs">
+                    {alert.signals.vision_fire && <span className="bg-gray-700 px-2 py-1 rounded text-red-300">📸 Vision AI</span>}
+                    {alert.signals.smoke && <span className="bg-gray-700 px-2 py-1 rounded text-gray-300">💨 Smoke</span>}
+                    {alert.signals.flame && <span className="bg-gray-700 px-2 py-1 rounded text-orange-300">🔥 IR Flame</span>}
+                    {(alert.signals.max_temp >= 50 || alert.signals.delta_temp >= 15) && 
+                      <span className="bg-gray-700 px-2 py-1 rounded text-pink-300">🌡️ Thermal Spike</span>
+                    }
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
-            <p>No active alert</p>
+            <div className="flex items-center justify-center h-full text-gray-500 pb-4">
+              <p>No active threats</p>
+            </div>
           )}
         </Card>
 
@@ -265,41 +296,115 @@ export default function App() {
         <Card title="Alert History">
           {history.length > 0 ? (
             <ul className="space-y-2 text-sm">
-              {history.slice(0, 5).map((a, i) => (
-                <li
-                  key={i}
-                  className="border-b border-gray-700 pb-2"
-                >
-                  {a.type} | {a.status}
-                </li>
-              ))}
+              {history.slice(0, 5).map((a, i) => {
+                
+                const displayStatus = a.status.replace("AlertStatus.", "");
+                
+                let timestampToUse = a.created_at; 
+                if (displayStatus === "RESOLVED" && a.resolved_at) {
+                  timestampToUse = a.resolved_at;
+                } else if (displayStatus === "ACTIVE" && a.updated_at) {
+                  timestampToUse = a.updated_at;
+                }
+
+                const timeString = timestampToUse 
+                  ? new Date(timestampToUse).toLocaleTimeString() 
+                  : "--:--";
+
+                // Determine severity color
+                const sevColor = a.severity === 'HIGH' ? 'text-red-500' : 
+                                 a.severity === 'MEDIUM' ? 'text-yellow-500' : 'text-blue-500';
+
+                return (
+                  <li
+                    key={i}
+                    className="border-b border-gray-700 pb-2 flex justify-between items-center"
+                  >
+                    <span className="flex items-center gap-2">
+                      <span title={`${a.severity} Severity`} className={`${sevColor} text-[10px]`}>⬤</span>
+                      <span className="font-semibold text-gray-200">{a.type}</span> 
+                      
+                      {/* Source Tag */}
+                      <span className="text-[10px] bg-gray-700 px-1.5 py-0.5 rounded text-gray-300">
+                        {a.source}
+                      </span>
+
+                      {/* NEW: Confidence Badge */}
+                      <span className="text-[10px] bg-gray-800 border border-gray-600 px-1.5 py-0.5 rounded text-gray-400" title="Confidence Score">
+                        {a.confidence}
+                      </span>
+                      
+                      <span className="text-gray-400">|</span> 
+                      
+                      <span className={
+                        displayStatus === "ACTIVE" ? "text-red-400 font-semibold animate-pulse" : 
+                        displayStatus === "RESOLVED" ? "text-green-400" : "text-yellow-400"
+                      }>
+                        {displayStatus}
+                      </span>
+                    </span>
+                    <span className="text-gray-500 text-xs">
+                      {timeString}
+                    </span>
+                  </li>
+                );
+              })}
             </ul>
           ) : (
-            <p>No alerts yet</p>
+            <p className="text-gray-500">No alerts yet</p>
           )}
         </Card>
 
         {/* SENSORS */}
         <Card title="Sensors">
           {sensor ? (
-            <div className="space-y-3">
-              <p>
-                Flame: {sensor.flame ? "🔥 DETECTED" : "No flame"}
-              </p>
-              <p>MQ135: {sensor.mq135_raw}</p>
-              <p>
-                Thermal Max:{" "}
-                {sensor.thermal
-                  ? Math.max(...sensor.thermal).toFixed(2)
-                  : "N/A"}
-              </p>
-              <p>
-                Updated:{" "}
-                <Freshness timestamp={sensor.timestamp} />
-              </p>
+            <div className="space-y-4">
+              
+              {/* Flame Status */}
+              <div className="flex justify-between items-center pb-2 border-b border-gray-700">
+                <span className="text-gray-400">IR Flame Sensor</span>
+                <span className={sensor.flame ? "text-orange-400 font-bold bg-orange-900/30 px-2 py-1 rounded" : "text-gray-300"}>
+                  {sensor.flame ? "🔥 DETECTED" : "Clear"}
+                </span>
+              </div>
+
+              {/* MQ135 Gas Bar */}
+              <div>
+                <div className="flex justify-between text-sm mb-1">
+                  <span className="text-gray-400">Air Quality (MQ135)</span>
+                  <span className={sensor.mq135_raw >= 300 ? "text-red-400 font-bold" : "text-gray-300"}>
+                    {sensor.mq135_raw} <span className="text-xs text-gray-500">/ 500</span>
+                  </span>
+                </div>
+                <div className="w-full h-2 bg-gray-800 rounded-full overflow-hidden border border-gray-700">
+                  <div
+                    className={`h-full transition-all duration-300 ${
+                      sensor.mq135_raw >= 300 ? 'bg-red-500' : 
+                      sensor.mq135_raw >= 150 ? 'bg-yellow-500' : 'bg-green-500'
+                    }`}
+                    style={{ width: `${Math.min((sensor.mq135_raw / 500) * 100, 100)}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Thermal Data */}
+              <div className="flex justify-between items-center text-sm pt-2">
+                <span className="text-gray-400">Thermal Max</span>
+                <span className="font-mono">{sensor.thermal ? Math.max(...sensor.thermal).toFixed(1) : "N/A"} °C</span>
+              </div>
+
+              {/* Freshness (FIXED) */}
+              <div className="pt-2 text-xs border-t border-gray-700 mt-2">
+                <span className="text-green-400 font-medium flex items-center gap-2 mt-2">
+                  <span className="animate-pulse">●</span> Live Stream
+                </span>
+              </div>
+              
             </div>
           ) : (
-            <p>No sensor data</p>
+            <div className="flex items-center justify-center h-full text-gray-500 pb-4">
+              <p>Waiting for sensor telemetry...</p>
+            </div>
           )}
         </Card>
 
