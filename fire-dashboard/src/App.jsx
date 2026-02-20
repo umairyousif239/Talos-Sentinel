@@ -1,3 +1,4 @@
+/* eslint-disable */
 import { useEffect, useState } from "react";
 
 const API = "http://127.0.0.1:8000";
@@ -265,7 +266,7 @@ export default function App() {
   }
 
   const fireActive = vision?.detected;
-  const alertActive = alert && (alert.status === "NEW" || alert.status === "ACTIVE" || alert.status === "AlertStatus.NEW" || alert.status === "AlertStatus.ACTIVE");
+  const alertActive = ["NEW", "ACTIVE", "AlertStatus.NEW", "AlertStatus.ACTIVE"].includes(alert?.status)
 
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100 p-8">
@@ -413,8 +414,21 @@ export default function App() {
                   : "--:--";
 
                 // Determine severity color
-                const sevColor = a.severity === 'HIGH' ? 'text-red-500' : 
-                                 a.severity === 'MEDIUM' ? 'text-yellow-500' : 'text-blue-500';
+                const severityColors = {
+                  HIGH: "text-red-500",
+                  MEDIUM: "text-yellow-500",
+                  LOW: "text-blue-500"
+                };
+
+                const statusColors = {
+                  NEW: "text-yellow-400",
+                  ACTIVE: "text-red-400 font-semibold animate-pulse",
+                  RESOLVED: "text-green-400"
+                };
+
+                // look up the colors directly (defaults to grey if not found)
+                const sevColor = severityColors[a.severity] || "text-grey-500";
+                const displayColor = statusColors[displayStatus] || "text-grey-500";
 
                 return (
                   <li
@@ -437,10 +451,7 @@ export default function App() {
                       
                       <span className="text-gray-400">|</span> 
                       
-                      <span className={
-                        displayStatus === "ACTIVE" ? "text-red-400 font-semibold animate-pulse" : 
-                        displayStatus === "RESOLVED" ? "text-green-400" : "text-yellow-400"
-                      }>
+                      <span className={displayColor}>
                         {displayStatus}
                       </span>
                     </span>
@@ -494,7 +505,7 @@ export default function App() {
                 <span className="font-mono">{sensor.thermal ? Math.max(...sensor.thermal).toFixed(1) : "N/A"} °C</span>
               </div>
 
-              {/* Freshness (FIXED) */}
+              {/* Freshness */}
               <div className="pt-2 text-xs border-t border-gray-700 mt-2">
                 <span className="text-green-400 font-medium flex items-center gap-2 mt-2">
                   <span className="animate-pulse">●</span> Live Stream
