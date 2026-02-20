@@ -1,7 +1,9 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from typing import List
 import threading
+
+from backend.api.login import get_current_user
 
 router = APIRouter(prefix="/sensors", tags=["Sensors"])
 
@@ -15,14 +17,14 @@ class SensorFrame(BaseModel):
     mq135_raw: int
     thermal: List[float] = Field(..., min_length=64, max_length=64)
 
-@router.post("/sensor-frame")
+@router.post("/sensor-frame", dependencies=[Depends(get_current_user)])
 def receive_sensor_frame(frame: SensorFrame):
     global latest_frame
     with lock:
         latest_frame = frame.dict()
     return {"status": "ok"}
 
-@router.get("/latest")
+@router.get("/latest", dependencies=[Depends(get_current_user)])
 def get_latest():
     with lock:
         if latest_frame is None:

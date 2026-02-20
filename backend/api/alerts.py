@@ -1,4 +1,7 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+
+from backend.api.login import get_current_user
+
 from backend.modules.alert_loop import latest_alert
 from backend.modules.alert_store import (
     fetch_alert_history,
@@ -7,14 +10,14 @@ from backend.modules.alert_store import (
 
 router = APIRouter(prefix="/alerts", tags=["Alerts"])
 
-@router.get("/history")
+@router.get("/history", dependencies=[Depends(get_current_user)])
 def get_history(limit: int = 100):
     """
     returns the last 100 triggered alerts
     """
     return fetch_alert_history(limit)
 
-@router.get("/latest")
+@router.get("/latest", dependencies=[Depends(get_current_user)])
 def get_latest():
     """
     Returns most recent alert (if any)

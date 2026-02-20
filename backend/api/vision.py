@@ -1,10 +1,12 @@
 import cv2
 from ultralytics import YOLO
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 import threading
 import time
 import asyncio
+
+from backend.api.login import get_current_user
 
 # Load NCNN model
 model = YOLO("models/trained_yolov8n_ncnn_model", task="detect")  # NCNN model folder
@@ -123,18 +125,18 @@ async def mjpeg_generator():
 # FastAPI app
 router = APIRouter(prefix="/vision", tags=["Vision"])
 
-@router.get("/video_feed")
+@router.get("/video_feed", dependencies=[Depends(get_current_user)])
 async def video_feed():
     return StreamingResponse(mjpeg_generator(),
                              media_type='multipart/x-mixed-replace; boundary=frame')
 
 # Optional health endpoint
-@router.get("/health")
+@router.get("/health", dependencies=[Depends(get_current_user)])
 async def health():
     return {"status": "ok", "fps": "check visually on /video_feed"}
 
 # Expose detections via API
-@router.get("/latest")
+@router.get("/latest", dependencies=[Depends(get_current_user)])
 def get_latest():
     with detections_lock:
         if latest_detections is None:

@@ -7,6 +7,8 @@ requests
 pyserial
 numpy
 opencv-python
+bcrypt
+python-multipart
 #openvino-dev[onnx] # will be changed to onnxruntime-lite for deployment on edge devices
 
 # Core Packages:

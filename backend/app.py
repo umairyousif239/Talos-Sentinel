@@ -1,16 +1,25 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import asyncio
 
 from backend.api.vision import router as vision_router
 from backend.api.alerts import router as alerts_router
 from backend.api.sensors import router as sensors_router
+from backend.api.login import router as auth_router, get_password_hash
+
+from backend.modules.auth_store import init_auth_db, create_user_in_db
 from backend.modules.alert_loop import alert_loop
-from fastapi.middleware.cors import CORSMiddleware
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
+    # Auth Database Startup
+    init_auth_db()
+    # seed the admin account if it already doesnt exist
+    hashed_pw = get_password_hash("fyp2026")
+    create_user_in_db("admin", hashed_pw)
+    print("Auth Database initialized")
+    # Surveillance Startup
     task = asyncio.create_task(alert_loop())
     print("✅ Alert evaluation loop started")
 
@@ -37,7 +46,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
+# Usage of login API
+app.include_router(auth_router)
 
 # Usage of vision API
 app.include_router(vision_router)
