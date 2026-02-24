@@ -1,9 +1,11 @@
+import os
+import cv2
 import time
 import requests
 from enum import Enum
 from typing import Optional
 
-from backend.api.vision import get_latest as fetch_latest_vision
+from backend.api.vision import get_latest as fetch_latest_vision, get_snapshot_frame
 from backend.api.sensors import get_latest as fetch_latest_sensors
 
 from backend.modules.alert_state import AlertStatus, AlertSeverity
@@ -31,6 +33,10 @@ current_alert = None
 last_trigger_time = 0
 PERSISTENCE_SECONDS = 5 #Alert must persist to ensure its not a false positive
 RESOLVE_TIMEOUT = 10 # Seconds without trigger results in resolved status
+
+# --- Evidence Capture Setup ---
+SNAPSHOT_DIR = "backend/data/snapshots"
+os.makedirs(SNAPSHOT_DIR, exist_ok=True)
 
 # Rate of Rise Memory
 last_max_temp_val = None
@@ -165,14 +171,17 @@ def evaluate_alerts() -> Optional[dict]:
     # Create New Alert
     # -----------------------------
     if current_alert is None:
+        alert_id = f"alert_{int(now)}"
+        
         current_alert = {
-            "id": f"alert_{int(now)}",
+            "id": alert_id,
             "type": "FIRE" if (v_fire > v_smoke or s_flame == 1) else "SMOKE",
             "source": source,
             "status": AlertStatus.NEW,
             "severity": severity.name if isinstance(severity, Enum) else severity,
             "confidence": risk_score,
             "created_at": timestamp_ms,
+            "snapshot_path": None, 
             "signals": {
                 "vision_fire": v_fire > 0,
                 "smoke": v_smoke > 0 or s_mq135 >= 0.5,
@@ -183,6 +192,18 @@ def evaluate_alerts() -> Optional[dict]:
                 "mq135_raw": mq135,
             },
         }
+        
+        # Evidence Capture Logic
+        frame = get_snapshot_frame()
+        if frame is not None:
+            filename = f"{alert_id}.jpg"
+            filepath = os.path.join(SNAPSHOT_DIR, filename)
+            
+            # write the image to the hard drive
+            cv2.imwrite(filepath, frame)
+            
+            # attach the path to the alert dictionary
+            current_alert["snapshot_path"] = filepath
 
         # Start persistence timer properly
         last_trigger_time = now

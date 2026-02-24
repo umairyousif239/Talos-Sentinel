@@ -289,7 +289,7 @@ export default function App() {
   const smokeConf = vision?.smoke_confidence || 0;
 
   let visionStatusText = "Detection: None";
-  let visionStatusColor = "text-white-400";
+  let visionStatusColor = "text-grey-400";
 
   if (fireConf > 0 && smokeConf > 0) {
     visionStatusText = "🔥 Fire & 💨 Smoke Detected!";
@@ -449,11 +449,11 @@ export default function App() {
             </button>
           </div>
         }>
-          {history.length > 0 ? (
+          {history?.length > 0 ? (
             <ul className="space-y-2 text-sm">
               {history.slice(0, 5).map((a, i) => {
                 
-                const displayStatus = a.status.replace("AlertStatus.", "");
+                const displayStatus = (a.status || "UNKNOWN").replace("AlertStatus.", "");
                 
                 let timestampToUse = a.created_at; 
                 if (displayStatus === "RESOLVED" && a.resolved_at) {
@@ -501,6 +501,19 @@ export default function App() {
                       <span className="text-[10px] bg-gray-800 border border-gray-600 px-1.5 py-0.5 rounded text-gray-400" title="Confidence Score">
                         {a.confidence}
                       </span>
+
+                      {/* Clickable Snapshot Icon*/}
+                      {a.snapshot_path && (
+                        <a
+                          href={`${API}/alerts/snapshots/${a.id}.jpg?token=${token}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[10px] bg-gray-700 hover:bg-blue-600 px-1.5 py-0.5 rounded cursor-pointer transition-colors"
+                          title="View Evidence Snapshot"
+                        >
+                          📸
+                        </a>
+                      )}
                       
                       <span className="text-gray-400">|</span> 
                       

@@ -122,6 +122,14 @@ async def mjpeg_generator():
         # Throttle ~30 FPS
         await asyncio.sleep(0.03)
 
+def get_snapshot_frame():
+    """Returns a safe copy of the current annotated frame for evidence saving"""
+    global output_frame
+    with frame_lock:
+        if output_frame is not None:
+            return output_frame.copy()
+        return None
+
 # FastAPI app
 router = APIRouter(prefix="/vision", tags=["Vision"])
 

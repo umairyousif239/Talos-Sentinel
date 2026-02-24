@@ -28,6 +28,7 @@ def init_db():
             created_at INTEGER,
             updated_at INTEGER,
             resolved_at INTEGER,
+            snapshot_path TEXT,
             signals TEXT
         )
     """)
@@ -42,15 +43,16 @@ def upsert_alert(alert: dict):
     cur.execute("""
         INSERT INTO alerts (
             id, type, source, severity, confidence,
-            status, created_at, updated_at, resolved_at, signals
+            status, created_at, updated_at, resolved_at, snapshot_path, signals
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT (id) DO UPDATE SET
         severity=excluded.severity,
         confidence=excluded.confidence,
         status=excluded.status,
         updated_at=excluded.updated_at,
         resolved_at=excluded.resolved_at,
+        snapshot_path=excluded.snapshot_path,
         signals=excluded.signals
     """, (
         alert["id"], 
@@ -62,6 +64,7 @@ def upsert_alert(alert: dict):
         alert.get("created_at"),
         alert.get("updated_at"),
         alert.get("resolved_at"),
+        alert.get("snapshot_path"),
         json.dumps(alert["signals"]),
     ))
     
@@ -137,7 +140,7 @@ def fetch_alert_history(limit: int = 100):
     
     cur.execute("""
         SELECT id, type, source, severity, confidence,
-               status, created_at, updated_at, resolved_at, signals
+               status, created_at, updated_at, resolved_at, snapshot_path, signals
         FROM alerts
         ORDER BY created_at DESC
         limit ?
@@ -157,7 +160,8 @@ def fetch_alert_history(limit: int = 100):
             "created_at": r[6],
             "updated_at": r[7],
             "resolved_at": r[8],
-            "signals": json.loads(r[9]),
+            "snapshot_path": r[9],
+            "signals": json.loads(r[10]),
         }
         for r in rows
     ]
