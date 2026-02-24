@@ -229,6 +229,26 @@ export default function App() {
     setToken(null);
   };
 
+  const handleDownloadCSV = async () => {
+    try {
+      const res = await fetch(`${API}/alerts/export`, {
+        headers: { "Authorization": `Bearer ${token}`}
+      });
+      if (!res.ok) throw new Error ("Export failed!");
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `incident_report_${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch (err) {
+      console.error("Could not download CSV", err);
+    }
+  };
+
   useEffect(() => {
     if (!token) return; // stop fetching data if user logs out
 
@@ -395,7 +415,17 @@ export default function App() {
         </Card>
 
         {/* ALERT HISTORY */}
-        <Card title="Alert History">
+        <Card title={
+          <div className="flex justify-between items-center w-full">
+            <span>Alert History</span>
+            <button 
+              onClick={handleDownloadCSV}
+              className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded transition-colors"
+            >
+              Export as CSV
+            </button>
+          </div>
+        }>
           {history.length > 0 ? (
             <ul className="space-y-2 text-sm">
               {history.slice(0, 5).map((a, i) => {
