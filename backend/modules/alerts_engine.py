@@ -10,11 +10,21 @@ from backend.modules.alert_state import AlertStatus, AlertSeverity
 
 from backend.modules.alert_config import (
     VISION_FIRE_CONF,
+    VISION_SMOKE_CONF,
     MQ135_SMOKE_RAW,
     THERMAL_FIRE_TEMP,
     THERMAL_DELTA,
     FLAME_DETECTED
 )
+
+# Weights
+W_VISION_FIRE   = 0.35
+W_VISION_SMOKE  = 0.15
+W_FLAME         = 0.25
+W_THERMAL       = 0.15
+W_MQ135         = 0.10
+
+TRIGGER_THRESHOLD = 0.50
 
 # Global Alert Memory
 current_alert = None
@@ -26,33 +36,11 @@ RESOLVE_TIMEOUT = 10 # Seconds without trigger results in resolved status
 last_max_temp_val = None
 last_temp_time_val = None
 
-# Scoring Functions
-def compute_confidence(
-    fire: bool,
-    smoke: bool,
-    flame: bool,
-    thermal_fire: bool,
-    thermal_spike: bool
-) -> float:
-    
-    score = 0.0
-    
-    if fire:
-        score += 0.4
-    if smoke:
-        score += 0.2
-    if flame:
-        score += 0.2
-    if thermal_fire:
-        score += 0.1
-    if thermal_spike:
-        score += 0.1
-    return round(min(score, 1.0), 2)
-
-def compute_severity(confidence):
-    if confidence >= 0.75:
+def compute_severity(risk_score: float):
+    """Dynamically scales the severity based on the mathematical risk."""
+    if risk_score >= 0.75:
         return AlertSeverity.HIGH
-    if confidence >= 0.45:
+    if risk_score >= 0.45:
         return AlertSeverity.MEDIUM
     return AlertSeverity.LOW
 
@@ -64,7 +52,8 @@ def evaluate_alerts() -> Optional[dict]:
     Manages alert lifecycle
     """
 
-    global current_alert, last_trigger_time, last_max_temp_val, last_temp_time_val
+    global current_alert, last_trigger_time
+    global last_max_temp_val, last_temp_time_val
 
     vision = fetch_latest_vision()
     sensors = fetch_latest_sensors()
@@ -76,15 +65,18 @@ def evaluate_alerts() -> Optional[dict]:
         return None
 
     # -----------------------------
-    # Vision Parsing (FIXED)
+    # Vision Scoring (0.0 to 1.0)
     # -----------------------------
-    fire_detected = (
-        vision.get("detected", False)
-        and vision.get("confidence", 0) >= VISION_FIRE_CONF
-    )
+    v_fire = vision.get("fire_confidence", 0.0)
+    if v_fire < VISION_FIRE_CONF:
+        v_fire = 0.0 # Zero out the noise
+
+    v_smoke = vision.get("smoke_confidence", 0.0)
+    if v_smoke < VISION_SMOKE_CONF:
+        v_smoke = 0.0
 
     # -----------------------------
-    # Sensor Parsing
+    # Sensor Normalization (0.0 to 1.0)
     # -----------------------------
     flame = sensors.get("flame", 0)
     mq135 = sensors.get("mq135_raw", 0)
@@ -114,36 +106,44 @@ def evaluate_alerts() -> Optional[dict]:
     last_max_temp_val = max_temp
     last_temp_time_val = now
 
-    smoke_detected = mq135 >= MQ135_SMOKE_RAW
-    flame_detected = flame == FLAME_DETECTED
-    thermal_fire = max_temp >= THERMAL_FIRE_TEMP
-    thermal_spike = delta_temp >= THERMAL_DELTA
+    # Normalizing sensor values
+    # Flame will be 1 if flame detected, 0 if not
+    s_flame = 1.0 if flame == FLAME_DETECTED else 0.0
+
+    # thermal: 1.0 if absolute temp hits 50 or RoR spikes or delta is massive
+    s_thermal = 0.0
+    if max_temp >= THERMAL_FIRE_TEMP or thermal_ror or delta_temp >= THERMAL_DELTA:
+        s_thermal = 1.0
+    elif max_temp >= 35.0:
+        # partial score if its getting unusually warm (35c to 50c)
+        s_thermal = min((max_temp - 35.0) / 15.0, 1.0)
+    
+    # MQ135L 400 is heavy smoke and 200 would give a score of 0.5
+    s_mq135 = min(mq135 / MQ135_SMOKE_RAW, 1.0)
+
 
     # -----------------------------
-    # Source Labeling
+    # Weighted Fusion Engine
     # -----------------------------
-    if fire_detected and (smoke_detected or flame_detected or thermal_fire):
-        source = "FUSED"
-    elif fire_detected:
-        source = "VISION_ONLY"
-    elif smoke_detected or flame_detected or thermal_fire or thermal_ror:
-        source = "SENSOR_ONLY"
-    else:
-        source = "UNKNOWN"
-
-    # -----------------------------
-    # Trigger Logic
-    # -----------------------------
-    trigger = (
-        fire_detected and (smoke_detected or flame_detected or thermal_fire or thermal_ror)
-    ) or (
-        smoke_detected and (thermal_spike or thermal_ror)
-    ) or (
-        thermal_ror
-    ) or (
-        smoke_detected
+    risk_score = (
+        (W_VISION_FIRE * v_fire) +
+        (W_VISION_SMOKE * v_smoke) +
+        (W_FLAME * s_flame) +
+        (W_THERMAL * s_thermal) +
+        (W_MQ135 * s_mq135)
     )
+    
+    risk_score = round(min(risk_score, 1.0), 2)
 
+    # -----------------------------
+    # Trigger Logic & Source Labeling
+    # -----------------------------
+    trigger = risk_score >= TRIGGER_THRESHOLD
+    
+    if v_fire > 0 or v_smoke > 0:
+        source = "FUSED" if (s_flame  == 1 or s_thermal > 0 or s_mq135 > 0) else "VISION_ONLY"
+    else:
+        source = "SENSOR_ONLY"
     # -----------------------------
     # No Trigger → Possibly Resolve
     # -----------------------------
@@ -159,15 +159,7 @@ def evaluate_alerts() -> Optional[dict]:
     # -----------------------------
     # Trigger Active
     # -----------------------------
-    confidence = compute_confidence(
-        fire_detected,
-        smoke_detected,
-        flame_detected,
-        thermal_fire,
-        thermal_spike,
-    )
-
-    severity = compute_severity(confidence)
+    severity = compute_severity(risk_score)
 
     # -----------------------------
     # Create New Alert
@@ -175,26 +167,25 @@ def evaluate_alerts() -> Optional[dict]:
     if current_alert is None:
         current_alert = {
             "id": f"alert_{int(now)}",
-            "type": "FIRE" if fire_detected else "SMOKE",
+            "type": "FIRE" if (v_fire > v_smoke or s_flame == 1) else "SMOKE",
             "source": source,
             "status": AlertStatus.NEW,
-            "severity": severity,
-            "confidence": confidence,
+            "severity": severity.name if isinstance(severity, Enum) else severity,
+            "confidence": risk_score,
             "created_at": timestamp_ms,
             "signals": {
-                "vision_fire": fire_detected,
-                "smoke": smoke_detected,
-                "flame": flame_detected,
+                "vision_fire": v_fire > 0,
+                "smoke": v_smoke > 0 or s_mq135 >= 0.5,
+                "flame": s_flame == 1,
                 "max_temp": round(max_temp, 1),
                 "delta_temp": round(delta_temp, 1),
-                "mq135_raw": mq135,
                 "thermal_ror": thermal_ror,
+                "mq135_raw": mq135,
             },
         }
 
         # Start persistence timer properly
         last_trigger_time = now
-
         return current_alert
 
     # -----------------------------
@@ -202,7 +193,7 @@ def evaluate_alerts() -> Optional[dict]:
     # -----------------------------
 
     # Promote NEW → ACTIVE after persistence window
-# Promote NEW → ACTIVE after persistence window
+    # Promote NEW → ACTIVE after persistence window
     if current_alert["status"] == AlertStatus.NEW:
         created_time_sec = current_alert["created_at"] / 1000.0
         if (now - created_time_sec) >= PERSISTENCE_SECONDS:
@@ -210,12 +201,11 @@ def evaluate_alerts() -> Optional[dict]:
 
     # Update running alert
     current_alert.update({
-        "severity": severity,
-        "confidence": confidence,
+        "severity": severity.name if isinstance(severity, Enum) else severity,
+        "confidence": risk_score,
         "updated_at": timestamp_ms,
     })
 
     # Keep refreshing trigger timer while active
     last_trigger_time = now
-
     return current_alert
