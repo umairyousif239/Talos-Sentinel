@@ -1,7 +1,7 @@
 /* eslint-disable */
 import { useEffect, useState } from "react";
 
-const IP = import.meta.env.VITE_API_URL || "127.0.0.1";
+const IP = import.meta.env.VITE_IP_ADDR || "127.0.0.1";
 const API = `http://${IP}:8000`;
 
 /* ================= CARD COMPONENT ================= */

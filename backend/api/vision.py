@@ -9,7 +9,7 @@ import asyncio
 from backend.api.login import get_current_user, get_current_user_from_query
 
 # Load NCNN model
-model = YOLO("models/trained_yolov8n_ncnn_model", task="detect")  # NCNN model folder
+model = YOLO("models/yolov8n_ncnn_model", task="detect")  # NCNN model folder
 IMG_SIZE = 256
 CONF_THRESH = 0.25
 

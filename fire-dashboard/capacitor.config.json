@@ -1,0 +1,10 @@
+{
+  "appId": "com.fyp.surveillance",
+  "appName": "AI Fire Surveillance",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "http",
+    "cleartext": true
+  }
+}
