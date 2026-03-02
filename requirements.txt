@@ -9,6 +9,7 @@ numpy
 opencv-python
 bcrypt
 python-multipart
+PyJWT
 # #openvino-dev[onnx] # will be changed to onnxruntime-lite for deployment on edge devices
 
 # # Core Packages:
