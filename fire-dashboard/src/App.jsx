@@ -1,5 +1,6 @@
 /* eslint-disable */
 import { useEffect, useState, useRef } from "react";
+import { LocalNotifications } from '@capacitor/local-notifications';
 
 const IP = import.meta.env.VITE_IP_ADDR || "127.0.0.1";
 const API = `http://${IP}:8000`;
@@ -20,12 +21,27 @@ const STATUS_COLORS = {
 const ALERT_ACTIVE_STATES = ["NEW", "ACTIVE", "AlertStatus.NEW", "AlertStatus.ACTIVE"];
 
 /* ================= WEB AUDIO API SIREN ================= */
-// Generates a harsh, hardware-style alarm mathematically. Zero dependencies.
 const SirenAlarm = {
   ctx: null,
   oscillator: null,
   gainNode: null,
   interval: null,
+
+  unlock() {
+    if (!this.ctx) {
+      this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (this.ctx.state === "suspended") {
+      this.ctx.resume();
+    }
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    gain.gain.value = 0; 
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(0);
+    osc.stop(this.ctx.currentTime + 0.001);
+  },
 
   play() {
     if (!this.ctx) {
@@ -35,26 +51,24 @@ const SirenAlarm = {
       this.ctx.resume();
     }
     
-    // Stop any existing siren before starting a new one
     this.stop();
 
     this.oscillator = this.ctx.createOscillator();
     this.gainNode = this.ctx.createGain();
 
-    this.oscillator.type = "square"; // Harsh, piercing sound
+    this.oscillator.type = "square"; 
     this.oscillator.connect(this.gainNode);
     this.gainNode.connect(this.ctx.destination);
 
     this.oscillator.start();
 
-    // Modulate the frequency to create a "wailing" effect
     let high = true;
     this.interval = setInterval(() => {
       if (this.ctx && this.oscillator) {
         this.oscillator.frequency.setTargetAtTime(high ? 1000 : 600, this.ctx.currentTime, 0.1);
         high = !high;
       }
-    }, 400); // Switches pitch every 400ms
+    }, 400); 
   },
 
   stop() {
@@ -186,6 +200,7 @@ function Login({ setToken }) {
 
   const handleLogin = async (e) => {
     e.preventDefault();
+    try { SirenAlarm.unlock(); } catch (err) { console.warn("Unlock failed", err); }
     setError("");
 
     const formData = new URLSearchParams();
@@ -260,7 +275,6 @@ export default function App() {
   const [alert, setAlert] = useState(null);
   const [history, setHistory] = useState([]);
 
-  // --- Notification & Alarm State ---
   const [isRinging, setIsRinging] = useState(false);
   const lastAlertIdRef = useRef(null);
 
@@ -289,14 +303,38 @@ export default function App() {
     }
   };
 
-  // Ask for notification permissions once on load
   useEffect(() => {
-    if ("Notification" in window && Notification.permission === "default") {
-      Notification.requestPermission();
+    if (window.cordova && window.cordova.plugins && window.cordova.plugins.backgroundMode) {
+      const bgMode = window.cordova.plugins.backgroundMode;
+      bgMode.enable();
+      bgMode.setDefaults({
+        title: "Surveillance Active",
+        text: "Monitoring sensors in the background...",
+        resume: true,
+        hidden: false,
+        bigText: true
+      });
+
+      bgMode.on('activate', () => {
+        bgMode.disableWebViewOptimizations();
+      });
     }
   }, []);
 
-  // Main Data Fetching Loop
+  useEffect(() => {
+    const requestNativePermissions = async () => {
+      try {
+        const permStatus = await LocalNotifications.checkPermissions();
+        if (permStatus.display !== 'granted') {
+          await LocalNotifications.requestPermissions();
+        }
+      } catch (err) {
+        console.warn("Could not request native permissions", err);
+      }
+    };
+    requestNativePermissions();
+  }, []);
+
   useEffect(() => {
     if (!token) return;
 
@@ -327,7 +365,7 @@ export default function App() {
     return () => clearInterval(interval);
   }, [token]);
 
-  // Alarm & Notification Watcher
+  // --- OSCILLATOR ALARM & NOTIFICATION WATCHER ---
   useEffect(() => {
     if (!alert) return;
 
@@ -337,17 +375,33 @@ export default function App() {
     if (isNewThreat) {
       lastAlertIdRef.current = alert.id;
 
-      // 1. Push Notification
-      if ("Notification" in window && Notification.permission === "granted") {
-        new Notification(`🚨 ${alert.severity} ALERT: ${alert.type}`, {
-          body: `Confidence: ${alert.confidence}% \nLocation: Node 1`,
-          icon: '/favicon.ico',
-          vibrate: [200, 100, 200, 100, 200], // Android vibration
-          requireInteraction: true 
-        });
+      // 1. Build the dynamic triggers string
+      let activeTriggers = [];
+      if (alert.signals) {
+        if (alert.signals.vision_fire) activeTriggers.push("Vision AI");
+        if (alert.signals.smoke) activeTriggers.push("Smoke");
+        if (alert.signals.flame) activeTriggers.push("IR Flame");
+        if (alert.signals.max_temp >= 50 || alert.signals.delta_temp >= 15) activeTriggers.push("Thermal Spike");
+        if (alert.signals.thermal_ror) activeTriggers.push("Heat Spike");
       }
+      const triggerText = activeTriggers.length > 0 ? activeTriggers.join(", ") : "Unknown Sensor";
 
-      // 2. Sound Siren for Medium/High
+      // 2. Create the Human Touch strings
+      const shortBody = `There has been a ${alert.type} detection!`;
+      // \n forces a line break in the expanded view
+      const expandedDetail = `${shortBody}\nConfidence: ${alert.confidence}%\nTriggers: ${triggerText}`;
+
+      // 3. Instant Push Notification with Dropdown
+      LocalNotifications.schedule({
+        notifications: [{
+          title: `🚨 ${alert.severity} ALERT: ${alert.type}`,
+          body: shortBody,          // What shows initially
+          largeBody: expandedDetail, // This creates the dropdown arrow!
+          id: Math.floor(Math.random() * 100000) + 1
+        }]
+      }).catch(err => console.warn("Local notification failed", err));
+
+      // 3. Play Web Audio Oscillator
       if (alert.severity === 'MEDIUM' || alert.severity === 'HIGH') {
         try {
           SirenAlarm.play();
@@ -357,12 +411,10 @@ export default function App() {
         }
       }
     } else if (!isActive && isRinging) {
-      // Auto-silence if threat is resolved on backend
       SirenAlarm.stop();
       setIsRinging(false);
     }
 
-    // Cleanup siren if component unmounts
     return () => {
       if (!isActive) SirenAlarm.stop();
     };
@@ -377,7 +429,6 @@ export default function App() {
     return <Login setToken={setToken} />;
   }
 
-  // --- UI Derived State ---
   const fireConf = vision?.fire_confidence || 0;
   const smokeConf = vision?.smoke_confidence || 0;
   const alertActive = ALERT_ACTIVE_STATES.includes(alert?.status);
@@ -397,9 +448,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-100 p-8">
-      
-      {/* Header with Logout Button */}
+    <div className="min-h-screen bg-gray-900 text-gray-100 p-8" onClick={() => { try { SirenAlarm.unlock(); } catch (e) {} }}>
       <div className="flex justify-between items-center mb-10">
         <h1 className="text-3xl font-bold">
           🔥 AI Fire and Smoke Surveillance System
@@ -491,7 +540,6 @@ export default function App() {
                 </div>
               )}
 
-              {/* SILENCE ALARM BUTTON */}
               {isRinging && (
                 <button
                   onClick={handleSilenceAlarm}
