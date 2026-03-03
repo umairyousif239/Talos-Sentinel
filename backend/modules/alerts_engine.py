@@ -1,7 +1,6 @@
 import os
 import cv2
 import time
-import requests
 from enum import Enum
 from typing import Optional
 
@@ -31,8 +30,8 @@ TRIGGER_THRESHOLD = 0.50
 # Global Alert Memory
 current_alert = None
 last_trigger_time = 0
-PERSISTENCE_SECONDS = 5 #Alert must persist to ensure its not a false positive
-RESOLVE_TIMEOUT = 10 # Seconds without trigger results in resolved status
+PERSISTENCE_SECONDS = 5 # Alert must persist to ensure its not a false positive
+RESOLVE_TIMEOUT = 10    # Seconds without trigger results in resolved status
 
 # --- Evidence Capture Setup ---
 SNAPSHOT_DIR = "backend/data/snapshots"
@@ -54,7 +53,7 @@ def compute_severity(risk_score: float):
 def evaluate_alerts() -> Optional[dict]:
     """
     Pulls latest sensor and vision data
-    Evaluates alert conditions
+    Evaluates alert conditions (Fusion & Overrides)
     Manages alert lifecycle
     """
 
@@ -95,7 +94,7 @@ def evaluate_alerts() -> Optional[dict]:
     min_temp = min(thermal)
     delta_temp = max_temp - min_temp
     
-    # Rate of Rise Math
+    # Rate of Rise Math (Flash Fire Logic)
     thermal_ror = False
     if last_max_temp_val is not None and last_temp_time_val is not None:
         dt = max_temp - last_max_temp_val
@@ -103,8 +102,8 @@ def evaluate_alerts() -> Optional[dict]:
         
         if time_diff > 0:
             rate_of_rise = dt / time_diff
-            # Trigger if temp jumps more than 2.0 celsius per second
-            if rate_of_rise > 2.0:
+            # Must spike >5.0°C/s AND the room must already be unnaturally warm (>35°C)
+            if rate_of_rise > 5.0 and max_temp > 35.0:
                 thermal_ror = True
                 print(f"Rate of Rise SPIKE DETECTED: +{rate_of_rise:.1f}°C/s")
                 
@@ -113,10 +112,9 @@ def evaluate_alerts() -> Optional[dict]:
     last_temp_time_val = now
 
     # Normalizing sensor values
-    # Flame will be 1 if flame detected, 0 if not
     s_flame = 1.0 if flame == FLAME_DETECTED else 0.0
 
-    # thermal: 1.0 if absolute temp hits 50 or RoR spikes or delta is massive
+    # thermal: 1.0 if absolute temp hits threshold, RoR spikes, or delta is massive
     s_thermal = 0.0
     if max_temp >= THERMAL_FIRE_TEMP or thermal_ror or delta_temp >= THERMAL_DELTA:
         s_thermal = 1.0
@@ -124,32 +122,56 @@ def evaluate_alerts() -> Optional[dict]:
         # partial score if its getting unusually warm (35c to 50c)
         s_thermal = min((max_temp - 35.0) / 15.0, 1.0)
     
-    # MQ135L 400 is heavy smoke and 200 would give a score of 0.5
+    # MQ135 Normalization
     s_mq135 = min(mq135 / MQ135_SMOKE_RAW, 1.0)
 
-
     # -----------------------------
-    # Weighted Fusion Engine
+    # Evaluate Logic (Overrides vs. Fusion)
     # -----------------------------
-    risk_score = (
-        (W_VISION_FIRE * v_fire) +
-        (W_VISION_SMOKE * v_smoke) +
-        (W_FLAME * s_flame) +
-        (W_THERMAL * s_thermal) +
-        (W_MQ135 * s_mq135)
-    )
+    trigger = False
+    override_active = False
+    override_type = ""
+    risk_score = 0.0
     
-    risk_score = round(min(risk_score, 1.0), 2)
+    # 1. Check Independent Overrides First (Hard Bypasses)
+    if s_mq135 >= 0.80:
+        trigger = True
+        override_active = True
+        override_type = "GAS LEAK"
+        risk_score = 1.0 # Force a max score for High Severity
+        
+    # Hardware Interlock: YOLO can only override if MQ-135 is at least 20% elevated
+    elif v_smoke >= 0.85 and s_mq135 >= 0.20:
+        trigger = True
+        override_active = True
+        override_type = "HEAVY SMOKE"
+        risk_score = 1.0
 
-    # -----------------------------
-    # Trigger Logic & Source Labeling
-    # -----------------------------
-    trigger = risk_score >= TRIGGER_THRESHOLD
-    
+    elif thermal_ror:
+        trigger = True
+        override_active = True
+        override_type = "FLASH FIRE"
+        risk_score = 1.0
+        
+    # 2. Standard Weighted Fusion (if no overrides triggered)
+    else:
+        calculated_score = (
+            (W_VISION_FIRE * v_fire) +
+            (W_VISION_SMOKE * v_smoke) +
+            (W_FLAME * s_flame) +
+            (W_THERMAL * s_thermal) +
+            (W_MQ135 * s_mq135)
+        )
+        risk_score = round(min(calculated_score, 1.0), 2)
+        if risk_score >= TRIGGER_THRESHOLD:
+            trigger = True
+            
+    # Determine Source String for UI
     if v_fire > 0 or v_smoke > 0:
-        source = "FUSED" if (s_flame  == 1 or s_thermal > 0 or s_mq135 > 0) else "VISION_ONLY"
+        source = "FUSED" if (s_flame == 1 or s_thermal > 0 or s_mq135 > 0) else "VISION_ONLY"
     else:
         source = "SENSOR_ONLY"
+
     # -----------------------------
     # No Trigger → Possibly Resolve
     # -----------------------------
@@ -163,9 +185,15 @@ def evaluate_alerts() -> Optional[dict]:
         return None
 
     # -----------------------------
-    # Trigger Active
+    # Trigger Active - Calculate Outputs
     # -----------------------------
     severity = compute_severity(risk_score)
+
+    # Determine Alert Type based on override or standard fusion
+    if override_active:
+        alert_type = override_type
+    else:
+        alert_type = "FIRE" if (v_fire > v_smoke or s_flame == 1) else "SMOKE"
 
     # -----------------------------
     # Create New Alert
@@ -175,7 +203,7 @@ def evaluate_alerts() -> Optional[dict]:
         
         current_alert = {
             "id": alert_id,
-            "type": "FIRE" if (v_fire > v_smoke or s_flame == 1) else "SMOKE",
+            "type": alert_type,
             "source": source,
             "status": AlertStatus.NEW,
             "severity": severity.name if isinstance(severity, Enum) else severity,
@@ -198,14 +226,10 @@ def evaluate_alerts() -> Optional[dict]:
         if frame is not None:
             filename = f"{alert_id}.jpg"
             filepath = os.path.join(SNAPSHOT_DIR, filename)
-            
-            # write the image to the hard drive
             cv2.imwrite(filepath, frame)
-            
-            # attach the path to the alert dictionary
             current_alert["snapshot_path"] = filepath
 
-        # Start persistence timer properly
+        # Start persistence timer
         last_trigger_time = now
         return current_alert
 
@@ -213,8 +237,7 @@ def evaluate_alerts() -> Optional[dict]:
     # Update Existing Alert
     # -----------------------------
 
-    # Promote NEW → ACTIVE after persistence window
-    # Promote NEW → ACTIVE after persistence window
+    # Promote NEW → ACTIVE after persistence window (e.g. 5 seconds)
     if current_alert["status"] == AlertStatus.NEW:
         created_time_sec = current_alert["created_at"] / 1000.0
         if (now - created_time_sec) >= PERSISTENCE_SECONDS:
@@ -225,6 +248,7 @@ def evaluate_alerts() -> Optional[dict]:
         "severity": severity.name if isinstance(severity, Enum) else severity,
         "confidence": risk_score,
         "updated_at": timestamp_ms,
+        "type": alert_type # Updates dynamically (e.g., changes from SMOKE to FLASH FIRE if it escalates)
     })
 
     # Keep refreshing trigger timer while active

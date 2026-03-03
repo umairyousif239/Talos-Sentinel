@@ -98,25 +98,30 @@ function Card({ title, children, className = "" }) {
   );
 }
 
-/* ================= DATA FRESHNESS INDICATOR ================= */
+/* ================= DATA FRESHNESS INDICATOR (FIXED) ================= */
 
-function Freshness({ timestamp }) {
+function Freshness({ triggerRefresh }) {
   const [age, setAge] = useState(0);
+  const lastSeenRef = useRef(Date.now());
 
   useEffect(() => {
-    if (!timestamp) return;
+    if (triggerRefresh) {
+      lastSeenRef.current = Date.now();
+      setAge(0);
+    }
+  }, [triggerRefresh]);
 
-    const updateAge = () => setAge(Date.now() - new Date(timestamp).getTime());
-    updateAge();
-    
-    const interval = setInterval(updateAge, 1000);
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setAge(Date.now() - lastSeenRef.current);
+    }, 1000);
     return () => clearInterval(interval);
-  }, [timestamp]);
+  }, []);
 
-  if (!timestamp) return <span className="text-red-500">●</span>;
+  if (!triggerRefresh) return <span className="text-red-500">●</span>;
 
   let color = "text-red-500";
-  if (age < 1000) color = "text-green-400";
+  if (age < 1500) color = "text-green-400";
   else if (age < 5000) color = "text-yellow-400";
 
   return (
@@ -277,6 +282,9 @@ export default function App() {
 
   const [isRinging, setIsRinging] = useState(false);
   const lastAlertIdRef = useRef(null);
+  
+  // ADDED: Streamkey for video reconnect
+  const [streamKey, setStreamKey] = useState(Date.now());
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -369,14 +377,13 @@ export default function App() {
   useEffect(() => {
     if (!alert) return;
 
-    // ONLY trigger the alarm and notification if the status has officially been promoted to ACTIVE
     const isStrictlyActive = alert.status === "ACTIVE" || alert.status === "AlertStatus.ACTIVE";
     const isNewActiveThreat = isStrictlyActive && alert.id !== lastAlertIdRef.current;
 
     if (isNewActiveThreat) {
       lastAlertIdRef.current = alert.id;
 
-      // 1. Build the dynamic triggers string
+      // 1. Build the dynamic triggers string (ADDED GAS CHECK)
       let activeTriggers = [];
       if (alert.signals) {
         if (alert.signals.vision_fire) activeTriggers.push("Vision AI");
@@ -384,20 +391,20 @@ export default function App() {
         if (alert.signals.flame) activeTriggers.push("IR Flame");
         if (alert.signals.max_temp >= 50 || alert.signals.delta_temp >= 15) activeTriggers.push("Thermal Spike");
         if (alert.signals.thermal_ror) activeTriggers.push("Heat Spike");
+        if (alert.signals.mq135_raw >= 240) activeTriggers.push("Dangerous Gas/VOCs");
       }
       const triggerText = activeTriggers.length > 0 ? activeTriggers.join(", ") : "Unknown Sensor";
 
-      // 2. Create the Human Touch strings
+      // 2. Create the Human Touch strings (FIXED MATH)
       const shortBody = `There has been a ${alert.type} detection!`;
-      // \n forces a line break in the expanded view
-      const expandedDetail = `${shortBody}\nConfidence: ${alert.confidence}%\nTriggers: ${triggerText}`;
+      const expandedDetail = `${shortBody}\nConfidence: ${Math.round(alert.confidence * 100)}%\nTriggers: ${triggerText}`;
 
-      // 3. Instant Push Notification with Dropdown
+      // 3. Instant Push Notification
       LocalNotifications.schedule({
         notifications: [{
           title: `🚨 ${alert.severity} ALERT: ${alert.type}`,
-          body: shortBody,          // What shows initially
-          largeBody: expandedDetail, // This creates the dropdown arrow!
+          body: shortBody,
+          largeBody: expandedDetail,
           id: Math.floor(Math.random() * 100000) + 1
         }]
       }).catch(err => console.warn("Local notification failed", err));
@@ -412,13 +419,11 @@ export default function App() {
         }
       }
     } else if (!ALERT_ACTIVE_STATES.includes(alert.status) && isRinging) {
-      // Auto-silence if threat is completely RESOLVED
       SirenAlarm.stop();
       setIsRinging(false);
     }
 
     return () => {
-      // Safety cleanup if the component unmounts while actively ringing
       const stillActive = ALERT_ACTIVE_STATES.includes(alert?.status);
       if (!stillActive) SirenAlarm.stop();
     };
@@ -467,21 +472,26 @@ export default function App() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
-        {/* LIVE CAMERA */}
+        {/* LIVE CAMERA (FIXED AUTO RECONNECT) */}
         <Card title="Live Camera" className="lg:col-span-2 lg:row-span-2">
           <img
-            src={`${API}/vision/video_feed?token=${token}`}
+            src={`${API}/vision/video_feed?token=${token}&k=${streamKey}`}
             alt="Live Feed"
             className="rounded-xl w-full border border-gray-700"
+            onError={() => {
+              console.warn("Video stream dropped. Attempting to reconnect...");
+              setTimeout(() => {
+                setStreamKey(Date.now());
+              }, 1500); 
+            }}
           />
         </Card>
 
-        {/* THERMAL WITH LEGEND */}
         <Card title="Thermal Camera (8x8)">
           {sensor?.thermal ? <ThermalGrid data={sensor.thermal} /> : <p>No thermal data</p>}
         </Card>
 
-        {/* VISION WITH CONFIDENCE BAR */}
+        {/* VISION (FIXED FRESHNESS) */}
         <Card
           title="Vision AI"
           className={fireConf > 0 || smokeConf > 0 ? "border-2 border-red-500 shadow-red-500/30" : ""}
@@ -493,14 +503,14 @@ export default function App() {
               </p>
               <ConfidenceBar value={fireConf} label="Fire Confidence" />
               <ConfidenceBar value={smokeConf} label="Smoke Confidence" />
-              <p>Updated: <Freshness timestamp={vision.timestamp} /></p>
+              <p>Updated: <Freshness triggerRefresh={vision} /></p>
             </div>
           ) : (
             <p>No vision data</p>
           )}
         </Card>
 
-        {/* CURRENT ALERT */}
+        {/* CURRENT ALERT (FIXED MATH & ADDED GAS UI) */}
         <Card
           title="Current Alert"
           className={alertActive ? "border-2 border-red-600 shadow-[0_0_15px_rgba(220,38,38,0.5)]" : ""}
@@ -523,8 +533,8 @@ export default function App() {
               <p>Type: <span className="font-semibold">{alert.type}</span></p>
               
               <div className="flex justify-between items-center">
-                <p>Confidence: {alert.confidence}</p>
-                <p className="text-sm">Updated: <Freshness timestamp={alert.updated_at} /></p>
+                <p>Confidence: {Math.round(alert.confidence * 100)}%</p>
+                <p className="text-sm">Updated: <Freshness triggerRefresh={alert} /></p>
               </div>
 
               {alert.signals && (
@@ -539,6 +549,9 @@ export default function App() {
                     }
                     {alert.signals.thermal_ror &&
                       <span className="bg-gray-700 px-2 py-1 rounded text-purple-300 border border-purple-500">📈 Rapid Heat Spike</span>
+                    }
+                    {alert.signals.mq135_raw >= 240 &&
+                      <span className="bg-gray-700 px-2 py-1 rounded text-yellow-300 border border-yellow-500">☣️ Toxic Gas</span>
                     }
                   </div>
                 </div>
@@ -603,7 +616,7 @@ export default function App() {
                       </span>
 
                       <span className="text-[10px] bg-gray-800 border border-gray-600 px-1.5 py-0.5 rounded text-gray-400" title="Confidence Score">
-                        {a.confidence}
+                        {Math.round(a.confidence * 100)}%
                       </span>
 
                       {a.snapshot_path && (
