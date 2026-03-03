@@ -90,15 +90,15 @@ const SirenAlarm = {
 function Card({ title, children, className = "" }) {
   return (
     <div className={`bg-gray-800 rounded-2xl p-6 shadow-xl border border-gray-700 ${className}`}>
-      <h2 className="text-lg font-semibold mb-4 text-gray-200">
+      <div className="text-lg font-semibold mb-4 text-gray-200">
         {title}
-      </h2>
+      </div>
       {children}
     </div>
   );
 }
 
-/* ================= DATA FRESHNESS INDICATOR (FIXED) ================= */
+/* ================= DATA FRESHNESS INDICATOR ================= */
 
 function Freshness({ triggerRefresh }) {
   const [age, setAge] = useState(0);
@@ -283,7 +283,6 @@ export default function App() {
   const [isRinging, setIsRinging] = useState(false);
   const lastAlertIdRef = useRef(null);
   
-  // ADDED: Streamkey for video reconnect
   const [streamKey, setStreamKey] = useState(Date.now());
 
   const handleLogout = () => {
@@ -383,7 +382,7 @@ export default function App() {
     if (isNewActiveThreat) {
       lastAlertIdRef.current = alert.id;
 
-      // 1. Build the dynamic triggers string (ADDED GAS CHECK)
+      // 1. Build the dynamic triggers string
       let activeTriggers = [];
       if (alert.signals) {
         if (alert.signals.vision_fire) activeTriggers.push("Vision AI");
@@ -391,11 +390,11 @@ export default function App() {
         if (alert.signals.flame) activeTriggers.push("IR Flame");
         if (alert.signals.max_temp >= 60 || alert.signals.delta_temp >= 15) activeTriggers.push("Thermal Spike");
         if (alert.signals.thermal_ror) activeTriggers.push("Heat Spike");
-        if (alert.signals.mq135_raw >= 240) activeTriggers.push("Dangerous Gas/VOCs");
+        if (alert.signals.mq135_raw >= 400) activeTriggers.push("Dangerous Gas/VOCs"); // Synced to 80% of 500
       }
       const triggerText = activeTriggers.length > 0 ? activeTriggers.join(", ") : "Unknown Sensor";
 
-      // 2. Create the Human Touch strings (FIXED MATH)
+      // 2. Create the Human Touch strings
       const shortBody = `There has been a ${alert.type} detection!`;
       const expandedDetail = `${shortBody}\nConfidence: ${Math.round(alert.confidence * 100)}%\nTriggers: ${triggerText}`;
 
@@ -472,9 +471,20 @@ export default function App() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
-        {/* LIVE CAMERA (FIXED AUTO RECONNECT) */}
-        <Card title="Live Camera" className="lg:col-span-2 lg:row-span-2">
+        {/* LIVE CAMERA */}
+        <Card title={
+          <div className="flex justify-between items-center w-full">
+            <span>Live Camera</span>
+            <button 
+              onClick={() => setStreamKey(Date.now())}
+              className="text-xs bg-gray-700 hover:bg-gray-600 text-gray-200 px-3 py-1 rounded transition-colors"
+            >
+              ↻ Reconnect
+            </button>
+          </div>
+        } className="lg:col-span-2 lg:row-span-2">
           <img
+            key={streamKey} // Forces React to completely rebuild the <img> node
             src={`${API}/vision/video_feed?token=${token}&k=${streamKey}`}
             alt="Live Feed"
             className="rounded-xl w-full border border-gray-700"
@@ -491,7 +501,7 @@ export default function App() {
           {sensor?.thermal ? <ThermalGrid data={sensor.thermal} /> : <p>No thermal data</p>}
         </Card>
 
-        {/* VISION (FIXED FRESHNESS) */}
+        {/* VISION AI */}
         <Card
           title="Vision AI"
           className={fireConf > 0 || smokeConf > 0 ? "border-2 border-red-500 shadow-red-500/30" : ""}
@@ -510,7 +520,7 @@ export default function App() {
           )}
         </Card>
 
-        {/* CURRENT ALERT (FIXED MATH & ADDED GAS UI) */}
+        {/* CURRENT ALERT */}
         <Card
           title="Current Alert"
           className={alertActive ? "border-2 border-red-600 shadow-[0_0_15px_rgba(220,38,38,0.5)]" : ""}
@@ -550,7 +560,7 @@ export default function App() {
                     {alert.signals.thermal_ror &&
                       <span className="bg-gray-700 px-2 py-1 rounded text-purple-300 border border-purple-500">📈 Rapid Heat Spike</span>
                     }
-                    {alert.signals.mq135_raw >= 240 &&
+                    {alert.signals.mq135_raw >= 400 &&
                       <span className="bg-gray-700 px-2 py-1 rounded text-yellow-300 border border-yellow-500">☣️ Toxic Gas</span>
                     }
                   </div>
@@ -659,15 +669,15 @@ export default function App() {
               <div>
                 <div className="flex justify-between text-sm mb-1">
                   <span className="text-gray-400">Air Quality (MQ135)</span>
-                  <span className={sensor.mq135_raw >= 300 ? "text-red-400 font-bold" : "text-gray-300"}>
+                  <span className={sensor.mq135_raw >= 400 ? "text-red-400 font-bold" : "text-gray-300"}>
                     {sensor.mq135_raw} <span className="text-xs text-gray-500">/ 500</span>
                   </span>
                 </div>
                 <div className="w-full h-2 bg-gray-800 rounded-full overflow-hidden border border-gray-700">
                   <div
                     className={`h-full transition-all duration-300 ${
-                      sensor.mq135_raw >= 300 ? 'bg-red-500' : 
-                      sensor.mq135_raw >= 150 ? 'bg-yellow-500' : 'bg-green-500'
+                      sensor.mq135_raw >= 400 ? 'bg-red-500' : 
+                      sensor.mq135_raw >= 250 ? 'bg-yellow-500' : 'bg-green-500'
                     }`}
                     style={{ width: `${Math.min((sensor.mq135_raw / 500) * 100, 100)}%` }}
                   />
