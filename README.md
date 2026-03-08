@@ -1,7 +1,7 @@
-# Autonomous Edge Surveillance: Multi-Modal Hazard Detection via Computer Vision and Sensor Fusion
+# Talos Sentinel: Multi-Modal Autonomous Surveillance via Sensor Fusion & Computer Vision
 This project was developed as a Final Year Project (FYP) for the completion of a **Bachelor's Degree in Computer Science** at **Shah Abdul Latif University, Khairpur**.
 
-The system transitions traditional surveillance from passive recording to active hazard response by deploying a locally optimized **YOLOv8** model on a **Raspberry Pi 5** . To eliminate the high false-positive rates typical of vision-only systems, this visual intelligence is mathematically fused with a hardware sensor array—including an **AMG8833 thermal camera**, **MQ-135 gas sensor**, and **Flame IR sensor**—to detect fire, smoke, and gas leaks in real-time.
+**Talos Sentinel** transitions traditional surveillance from passive recording to active hazard response by deploying a locally optimized **YOLOv8** model on a **Raspberry Pi 5** . To eliminate the high false-positive rates typical of vision-only systems, this visual intelligence is mathematically fused with a hardware sensor array—including an **AMG8833 thermal camera**, **MQ-135 gas sensor**, and **Flame IR sensor**—to detect fire, smoke, and gas leaks in real-time.
 
 Built with a "Privacy-First" philosophy, the entire architecture operates at the **Edge**, ensuring zero reliance on third-party cloud infrastructure or external internet connectivity.
 
@@ -55,7 +55,7 @@ Before starting, ensure you have the following installed on your development mac
 * Docker & Docker Compose (optional, for containerized deployment)
 
 ### 2. Hardware Setup
-1. **Sensor Array:** Wire the AMG8833, MQ-135, and Flame IR sensors to the ESP32 according to the Pinout Mapping & Calibration Guide in ```.\repo_resources\sensor_calibration_and_mapout.md```.
+1. **Sensor Array:** Wire the AMG8833, MQ-135, and Flame IR sensors to the ESP32 according to the Pinout Mapping & Calibration Guide in ```./repo_resources/sensor_calibration_and_mapout.md```.
 2. **Connection:** Connect the ESP32 and USB Camera to the Raspberry Pi 5 via USB ports .
 3. **Networking:** Power on the Pi. It is configured to broadcast an ad-hoc network: ```AI_Surveillance_Edge```.
 
@@ -139,7 +139,7 @@ If you use this project, its underlying logic, or the research methodology in yo
 
 ### BibTeX:
 ```
-@thesis{bhatti2026autonomousedgesurveillance,
+@thesis{bhatti2026talossentinel,
   author  = {Bhatti, Umair Yousif},
   title   = {Autonomous Edge Surveillance: Multi-Modal Hazard Detection via Computer Vision and Sensor Fusion},
   school  = {Shah Abdul Latif University, Khairpur},
@@ -174,9 +174,12 @@ If you use this project, its underlying logic, or the research methodology in yo
 │   ├── app.py
 │   └── dummy_data.py
 ├── fire-dashboard
+│   ├── android
+│   │   ├── app
+│   │   ├── gradle
+│   ├── public
 │   ├── src
 │   │   ├── assets
-│   │   │   └── react.svg
 │   │   ├── App.css
 │   │   ├── App.jsx
 │   │   ├── index.css
@@ -200,17 +203,19 @@ If you use this project, its underlying logic, or the research methodology in yo
 │   │   └── model_ncnn.py
 │   └── yolov8n.pt
 ├── repo_resources
-│   └── images
-│       ├── alert_state_diagram.png
-│       ├── database_schema.png
-│       ├── system_architecture_diagram.png
-│       ├── uml_sequence_diagram.png
-│       └── user_interface.jpg
+│   ├── images
+│   │   ├── alert_state_diagram.png
+│   │   ├── database_schema.png
+│   │   ├── system_architecture_diagram.png
+│   │   ├── uml_sequence_diagram.png
+│   │   └── user_interface.jpg
+│   └── sensor_calibration_and_mapout.md
 ├── sensors
 │   ├── AMG_MQ_IR
 │   │   └── AMG_MQ_IR.ino
 │   └── Sensor Fusion Wiring.txt
 ├── .gitignore
+├── LICENSE
 ├── README.md
 ├── main.py
 └── requirements.txt
