@@ -23,6 +23,7 @@ This project is made in accordance to the completion of my computer science degr
 * **Containerized Microservices:** The entire software stack is deployed via **Docker**, ensuring environment isolation and easy portability across different hardware.
 ### 4. User Interface & Monitoring
 * **Real-Time React Web Dashboard:** A high-contrast dark-mode interface featuring dynamic thermal grid color-mapping, live MJPEG streaming, and interactive alert history.
+![User Interface](./repo_resources/images/user_interface.jpg)
 * **Hybrid Android Mobile Application:** A Capacitor-powered application that provides mobile monitoring, remote push notifications, and evidence retrieval over the local network.
 * **Low-Latency Evidence Capture:** Automatically captures high-fidelity visual snapshots with bounding box overlays the moment an alert becomes ```ACTIVE``` for later audit.
 * **Client-Side CSV Export:** Allows administrators to generate and download structured incident reports directly from the browser for record-keeping.
