@@ -3,21 +3,21 @@
 This project is made in accordance to the completion of my computer science degree at Shah Abdul Latif University, Khairpur. This project is based on the YOLOv8 model combined with sensors like AMG8833, Flame IR Sensor and MQ-135 for the detection of threats, Smoke, Fire and Weapons. Furthermore, This project will be optimized to run on a Raspberry Pi 5 to serve as personal surveillance system.
 
 ## Features:
-1. ### Core Intelligence & Processing
+### 1. Core Intelligence & Processing
     * Edge-Based AI Inference: Utilizes a custom-trained YOLOv8 model optimized via the NCNN framework to detect fire and smoke locally on a Raspberry Pi 5 without cloud dependency.
     * Mathematical Fusion Engine: A decoupled background loop that calculates a normalized Risk Score by cross-referencing AI vision data with physical sensor telemetry to reduce false positives.
     * Thermal Rate of Rise (RoR) Calculation: Monitors how fast temperature spikes per second rather than waiting for an absolute heat threshold, allowing for faster "Flash Fire" detection.
     * State-Driven Alert Lifecycle Manager: Transitions threats through strict NEW, ACTIVE, and RESOLVED phases using "persistence windowing" to verify hazards over time.
-2. ### Hardware & Connectivity
+### 2. Hardware & Connectivity
     * Multi-Modal Sensor Array: Integrates an AMG8833 thermal camera, MQ-135 gas/smoke sensor, and Flame IR sensor for secondary hardware validation of visual threats.
     * Hardwired Serial USB Bridge: Connects the ESP32 sensor manager to the Raspberry Pi 5 via USB to eliminate wireless latency or interference during an emergency.
     * Standalone Wireless Access Point (WAP): The system broadcasts its own encrypted ad-hoc network, ensuring it remains operational and accessible even if municipal internet infrastructure fails.
-3. ### Software & Security
+### 3. Software & Security
     * Asynchronous Vision Pipeline: Employs Python's multiprocessing and shared memory to isolate heavy AI math from the web server, maintaining a fluid 25 to 30 FPS camera feed.
     * Token-Based Authentication (JWT): Secures all REST APIs, evidence snapshots, and live video streams using JSON Web Tokens and bcrypt password hashing.
     * Dual SQLite Database Architecture: Uses separate, lightweight databases for secure user authentication (auth.db) and persistent, high-efficiency event logging (alerts.db).
     * Containerized Microservices: The entire software stack is deployed via Docker, ensuring environment isolation and easy portability across different hardware.
-4. ### User Interface & Monitoring
+### 4. User Interface & Monitoring
     * Real-Time React Web Dashboard: A high-contrast dark-mode interface featuring dynamic thermal grid color-mapping, live MJPEG streaming, and interactive alert history.
     * Hybrid Android Mobile Application: A Capacitor-powered application that provides mobile monitoring, remote push notifications, and evidence retrieval over the local network.
     * Low-Latency Evidence Capture: Automatically captures high-fidelity visual snapshots with bounding box overlays the moment an alert becomes "ACTIVE" for later audit.
