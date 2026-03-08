@@ -1,6 +1,10 @@
-# AI Surveillance System Powered By ESP32 and Pi 5 For FYP
+# Autonomous Edge Surveillance: Multi-Modal Hazard Detection via Computer Vision and Sensor Fusion
 
-This project is made in accordance to the completion of my computer science degree at Shah Abdul Latif University, Khairpur. This project is based on the YOLOv8 model combined with sensors like AMG8833, Flame IR Sensor and MQ-135 for the detection of threats, Smoke, Fire and Weapons. Furthermore, This project will be optimized to run on a Raspberry Pi 5 to serve as personal surveillance system.
+This project was developed as a Final Year Project (FYP) for the completion of a **Bachelor's Degree in Computer Science** at **Shah Abdul Latif University, Khairpur**.
+
+The system transitions traditional surveillance from passive recording to active hazard response by deploying a locally optimized **YOLOv8** model on a **Raspberry Pi 5** . To eliminate the high false-positive rates typical of vision-only systems, this visual intelligence is mathematically fused with a hardware sensor array—including an **AMG8833 thermal camera**, **MQ-135 gas sensor**, and **Flame IR sensor**—to detect fire, smoke, and gas leaks in real-time.
+
+Built with a "Privacy-First" philosophy, the entire architecture operates at the **Edge**, ensuring zero reliance on third-party cloud infrastructure or external internet connectivity.
 
 ## Features:
 ### 1. Core Intelligence & Processing
@@ -38,29 +42,67 @@ This project is made in accordance to the completion of my computer science degr
 * **Low-Latency Evidence Capture:** Automatically captures high-fidelity visual snapshots with bounding box overlays the moment an alert becomes ```ACTIVE``` for later audit.
 * **Client-Side CSV Export:** Allows administrators to generate and download structured incident reports directly from the browser for record-keeping.
 
-## File Structure:
-```/Models```: houses all the trained models (both pytorch versions and the ONNX versions).
+## Installation & Deployment Guide:
+This guide details the steps required to set up this system on a Raspberry Pi 5 and ESP32.
 
-### sensors directory:
-```AMG_MQ_IR```: the microcode thats flashed onto esp32.
-```Sensor Fusion Wiring.txt```: txt file that goes over how all the sensors are wired up to the esp32.
+### 1. Prerequisites
+Before starting, ensure you have the following installed on your development machine:
+* Python 3.12+
+* Node.js (v24 or newer)
+* Arduino IDE (for ESP32 flashing)
+* Docker & Docker Compose (optional, for containerized deployment)
 
-### Backend Directory:
-```bridge.py```:  code used to parse the csv data from the sensor fusion into a json for FastAPI.
-```api.py```: used to convert the parsed json into an api endpoint.
+### 2. Hardware Setup
+1. **Sensor Array:** Wire the AMG8833, MQ-135, and Flame IR sensors to the ESP32 according to the Pinout Mapping.
+2. **Connection:** Connect the ESP32 and USB Camera to the Raspberry Pi 5 via USB ports .
+3. **Networking:** Power on the Pi. It is configured to broadcast an ad-hoc network: ```AI_Surveillance_Edge```.
 
-### For the frontend:
-to have a functional frontend, use this command to build all the dependencies.
+### 3. Microcontroller Firmware
+1. Open ```sensors/AMG_MQ_IR/AMG_MQ_IR.ino``` in the **Arduino IDE**.
+2. Install libraries: ```Adafruit_AMG88xx``` and ```Wire```.
+3. Select your ESP32 board and click **Upload**.
+
+### 4. Backend & AI Engine Setup
 ```
-npm create vite@latest fire-dashboard -- --template react
+# Clone the repository
+git clone https://github.com/umairyousif239/AI-Surveillance-System.git
+cd AI-Surveillance-System
+
+# Create and activate virtual environment
+python -m venv venv
+source venv/bin/activate
+
+# Install dependencies (FastAPI, OpenCV, NCNN)
+pip install -r requirements.txt
+
+# Start the API server
+uvicorn backend.app:app --host 0.0.0.0 --port 8000
+```
+
+### 5. Frontend Dashboard Setup
+In a new terminal on the Pi (It is possible to run the frontend alongside the backend. However, it is highly recommended to host it on a different machine to mitigate the processing on the Pi 5): 
+```
 cd fire-dashboard
 npm install
 
-npm install -D tailwindcss@3 postcss autoprefixer
-npx tailwindcss init -p
+# Set the target IP to the Pi's Access Point IP
+echo "VITE_IP_ADDR=10.42.0.1" > .env
 
+# Run in development mode
 npm run dev
 ```
+
+### Docker Deployment (Alternative)
+```
+# Ensure you are in the root directory
+docker-compose up --build -d
+```
+Note: Docker automatically handles hardware passthrough for ```/dev/video0``` and the ESP32 serial bridge.
+
+### Mobile App (Android)
+1. Sync the web assets: ```npx cap sync android```.
+2. Open the ```android``` folder in **Android Studio**.
+3. Connect your phone (with USB Debugging enabled) and click **Run** to flash the APK .
 
 ## To-do List:
 - [x] Collect Datasets.
@@ -76,8 +118,8 @@ npm run dev
 - [x] Fix the vision detection issue where the detections don't appear on the frontend.
 - [x] Fix the where the history doesn't appear on the frontend.
 - [x] Add Authentication to the project
-- [ ] Dockerize the whole project.
-- [ ] Optimize and host the project onto a Raspberry pi 5.
+- [x] Dockerize the whole project.
+- [x] Optimize and host the project onto a Raspberry pi 5.
 
 ## Directory Structure:
 ```
@@ -87,31 +129,54 @@ npm run dev
 ├── backend
 │   ├── api
 │   │   ├── alerts.py
+│   │   ├── login.py
 │   │   ├── sensors.py
 │   │   └── vision.py
 │   ├── bridge
 │   │   └── serial_bridge.py
+│   ├── database
 │   ├── modules
 │   │   ├── alert_config.py
 │   │   ├── alert_loop.py
 │   │   ├── alert_state.py
-│   │   └── alerts_engine.py
+│   │   ├── alert_store.py
+│   │   ├── alerts_engine.py
+│   │   └── auth_store.py
 │   ├── app.py
 │   └── dummy_data.py
+├── fire-dashboard
+│   ├── src
+│   │   ├── assets
+│   │   │   └── react.svg
+│   │   ├── App.css
+│   │   ├── App.jsx
+│   │   ├── index.css
+│   │   └── main.jsx
+│   ├── .gitignore
+│   ├── README.md
+│   ├── capacitor.config.json
+│   ├── eslint.config.js
+│   ├── index.html
+│   ├── package-lock.json
+│   ├── package.json
+│   ├── postcss.config.js
+│   ├── tailwind.config.js
+│   └── vite.config.js
 ├── models
 │   ├── trained_yolov8n_ncnn_model
+│   ├── yolov8n_ncnn_model
 │   │   ├── metadata.yaml
 │   │   ├── model.ncnn.bin
 │   │   ├── model.ncnn.param
 │   │   └── model_ncnn.py
-│   ├── trained_yolov8n_openvino_model
-│   │   ├── metadata.yaml
-│   │   ├── trained_yolov8n.bin
-│   │   └── trained_yolov8n.xml
-│   ├── trained_yolov8n.onnx
-│   ├── trained_yolov8n.pt
-│   ├── trained_yolov8s.onnx
-│   └── trained_yolov8s.pt
+│   └── yolov8n.pt
+├── repo_resources
+│   └── images
+│       ├── alert_state_diagram.png
+│       ├── database_schema.png
+│       ├── system_architecture_diagram.png
+│       ├── uml_sequence_diagram.png
+│       └── user_interface.jpg
 ├── sensors
 │   ├── AMG_MQ_IR
 │   │   └── AMG_MQ_IR.ino
