@@ -13,7 +13,9 @@ This project is made in accordance to the completion of my computer science degr
 * **Multi-Modal Sensor Array:** Integrates an **AMG8833** thermal camera, **MQ-135** gas/smoke sensor, and **Flame IR** sensor for secondary hardware validation of visual threats.
 * **Hardwired Serial USB Bridge:** Connects the ESP32 sensor manager to the Raspberry Pi 5 via USB to eliminate wireless latency or interference during an emergency.
 * **Standalone Wireless Access Point (WAP):** The system broadcasts its own encrypted ad-hoc network, ensuring it remains operational and accessible even if municipal internet infrastructure fails.
-![System Architecture](./repo_resources/images/system_architecture_diagram.png)
+    <div align="center">
+    <img src="./repo_resources/images/system_architecture_diagram.png" alt="System Architecture" width="600">
+    </div>
 ### 3. Software & Security
 * **Asynchronous Vision Pipeline:** Employs Python's multiprocessing and shared memory to isolate heavy AI math from the web server, maintaining a fluid 25 to 30 FPS camera feed.
 * **Token-Based Authentication (JWT):** Secures all REST APIs, evidence snapshots, and live video streams using **JSON Web Tokens** and **bcrypt** password hashing.
