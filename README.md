@@ -3,33 +3,25 @@
 This project is made in accordance to the completion of my computer science degree at Shah Abdul Latif University, Khairpur. This project is based on the YOLOv8 model combined with sensors like AMG8833, Flame IR Sensor and MQ-135 for the detection of threats, Smoke, Fire and Weapons. Furthermore, This project will be optimized to run on a Raspberry Pi 5 to serve as personal surveillance system.
 
 ## Features:
-1. **Edge AI & Computer Vision (```vision.py```)**
-    * **NCNN-Optimized Object Detection:** Utilizes a quantized YOLOv8 model running via the NCNN framework, specifically tuned for high-speed edge inference on ARM-based hardware (like the Raspberry Pi).
-    * **Multi-Class Threat Extraction:** Independently identifies, tracks, and scores confidence levels for both "Fire" and "Smoke" classes simultaneously.
-    * **Asynchronous Video Processing:** Employs a dedicated background capture thread (```capture_loop```) isolated with ```threading.Lock()``` to ensure heavy AI inference does not bottleneck the web server or drop camera frames.
-    * **Live MJPEG Streaming:** Converts annotated OpenCV frames into a low-latency MJPEG byte stream, allowing real-time video monitoring in the browser.
-2. **Continuous Multi-Sensor Data Fusion (```alert_engine.py```)**
-    * **Mathematical Risk Scoring (Weighted Fusion):** Replaces brittle boolean thresholds (if/else) with a normalized equation. Sensors (Vision, Thermal, Flame, MQ135) are scored from ```0.0``` to ```1.0```, multiplied by tuned architectural weights, and combined into a fluid Risk Score.
-    * **Thermal Rate of Rise (RoR) Calculus:** Tracks spatial and temporal temperature changes ($\frac{dT}{dt}$). It calculates the derivative of the thermal grid to detect dangerous temperature spikes (e.g., >2.0°C per second), preventing reliance solely on absolute temperature limits.
-    * **Intelligent Noise Flooring:** Uses configuration constants (```VISION_FIRE_CONF```, etc.) as hard noise floors to mathematically zero-out sensor drift and low-confidence visual artifacts before they enter the fusion engine.
-3. **State-Driven Alert Lifecycle (```alert_loop.py``` & ```alert_state.py```)**
-    * **Alert State Machine:** Transitions threats through a strict lifecycle: ```NEW``` -> ```ACTIVE``` -> ```RESOLVED```.
-    * **Persistence Windowing:** Requires a threat to maintain a high fusion score for a continuous duration (```PERSISTENCE_SECONDS```) before promoting it to ```ACTIVE```, mathematically eliminating transient false positives (like a passing lighter).
-    * **Dynamic Severity Scaling:** Automatically categorizes incidents into ```LOW```, ```MEDIUM```, or ```HIGH``` severity bands based directly on the fused mathematical risk score.
-    * **Asynchronous Evaluation Loop:** Runs the fusion engine continuously in the background via FastAPI's ```lifespan``` context manager, completely decoupled from frontend API requests.
-4. **Evidence Capture & Data Persistence (alert_store.py)**
-    * **Zero-Latency Evidence Snapshots:** Reaches into the active OpenCV frame buffer the exact millisecond a high-risk event triggers, saving a high-fidelity JPEG to the local filesystem without interrupting the live stream.
-    * **SQLite Event Upserting:** Uses ```ON CONFLICT (id) DO UPDATE``` to efficiently mutate live alerts in the database (updating severity, confidence, and timestamps) without creating duplicate records.
-    * **Automated CSV Incident Export:** Dynamically queries the SQLite history and generates a downloadable CSV report in memory (```io.StringIO```) for enterprise audit logging.
-5. **Enterprise Security & Authentication (```login.py```)**
-    * **OAuth2 / JWT Architecture:** Secures all system endpoints using JSON Web Tokens (JWT) with configurable expiration windows.
-    * **Cryptographic Password Hashing:** Secures admin credentials using ```bcrypt``` salting and hashing, ensuring plaintext passwords never touch the database.
-    * **Query-Parameter Media Authorization:** Protects static media assets (live video feeds and saved snapshot JPEGs) by parsing and validating JWTs directly from URL query parameters.
-6. **Real-Time React Dashboard (```App.jsx```)**
-    * **Dynamic Thermal Rendering:** Parses 64-point floating array data and renders an interpolated, color-mapped 8x8 heat grid with fixed ambient-to-fire temperature scales.
-    * **Data Freshness Tracking:** Implements continuous heartbeat indicators that track the exact age (in milliseconds) of incoming sensor and vision payloads, changing color if telemetry lags.
-    * **Secure Evidence Viewer:** Integrates a clickable UI element within the incident history log that fetches and renders authorized JPEG snapshots in a new browser tab.
-    * **Responsive "Dark Mode" UI:** Built with Tailwind CSS, utilizing a grid-based layout that prioritizes high-contrast threat visibility (pulsing borders, conditional typography colors).
+1. ### Core Intelligence & Processing
+    * Edge-Based AI Inference: Utilizes a custom-trained YOLOv8 model optimized via the NCNN framework to detect fire and smoke locally on a Raspberry Pi 5 without cloud dependency.
+    * Mathematical Fusion Engine: A decoupled background loop that calculates a normalized Risk Score by cross-referencing AI vision data with physical sensor telemetry to reduce false positives.
+    * Thermal Rate of Rise (RoR) Calculation: Monitors how fast temperature spikes per second rather than waiting for an absolute heat threshold, allowing for faster "Flash Fire" detection.
+    * State-Driven Alert Lifecycle Manager: Transitions threats through strict NEW, ACTIVE, and RESOLVED phases using "persistence windowing" to verify hazards over time.
+2. ### Hardware & Connectivity
+    * Multi-Modal Sensor Array: Integrates an AMG8833 thermal camera, MQ-135 gas/smoke sensor, and Flame IR sensor for secondary hardware validation of visual threats.
+    * Hardwired Serial USB Bridge: Connects the ESP32 sensor manager to the Raspberry Pi 5 via USB to eliminate wireless latency or interference during an emergency.
+    * Standalone Wireless Access Point (WAP): The system broadcasts its own encrypted ad-hoc network, ensuring it remains operational and accessible even if municipal internet infrastructure fails.
+3. ### Software & Security
+    * Asynchronous Vision Pipeline: Employs Python's multiprocessing and shared memory to isolate heavy AI math from the web server, maintaining a fluid 25 to 30 FPS camera feed.
+    * Token-Based Authentication (JWT): Secures all REST APIs, evidence snapshots, and live video streams using JSON Web Tokens and bcrypt password hashing.
+    * Dual SQLite Database Architecture: Uses separate, lightweight databases for secure user authentication (auth.db) and persistent, high-efficiency event logging (alerts.db).
+    * Containerized Microservices: The entire software stack is deployed via Docker, ensuring environment isolation and easy portability across different hardware.
+4. ### User Interface & Monitoring
+    * Real-Time React Web Dashboard: A high-contrast dark-mode interface featuring dynamic thermal grid color-mapping, live MJPEG streaming, and interactive alert history.
+    * Hybrid Android Mobile Application: A Capacitor-powered application that provides mobile monitoring, remote push notifications, and evidence retrieval over the local network.
+    * Low-Latency Evidence Capture: Automatically captures high-fidelity visual snapshots with bounding box overlays the moment an alert becomes "ACTIVE" for later audit.
+    * Client-Side CSV Export: Allows administrators to generate and download structured incident reports directly from the browser for record-keeping.
 
 ## File Structure:
 ```/Models```: houses all the trained models (both pytorch versions and the ONNX versions).
