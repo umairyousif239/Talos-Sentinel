@@ -135,7 +135,7 @@ This project is licensed under the **GNU General Public License v3.0**.
 If you use this project, its underlying logic, or the research methodology in your own work, please cite it as follows:
 
 ### APA Style:
-    Bhatti, Umair Yousif. (2026). Autonomous Edge Surveillance: Multi-Modal Hazard Detection via Computer Vision and Sensor Fusion (Bachelor's Thesis). Shah Abdul Latif University, Khairpur (Shahdadkot Campus).
+    Bhatti, U. Y. (2026). Autonomous Edge Surveillance: Multi-Modal Hazard Detection via Computer Vision and Sensor Fusion (Bachelor's Thesis). Shah Abdul Latif University, Khairpur (Shahdadkot Campus).
 
 ### BibTeX:
 ```
