@@ -55,7 +55,7 @@ Before starting, ensure you have the following installed on your development mac
 * Docker & Docker Compose (optional, for containerized deployment)
 
 ### 2. Hardware Setup
-1. **Sensor Array:** Wire the AMG8833, MQ-135, and Flame IR sensors to the ESP32 according to the Pinout Mapping.
+1. **Sensor Array:** Wire the AMG8833, MQ-135, and Flame IR sensors to the ESP32 according to the Pinout Mapping & Calibration Guide in ```.\repo_resources\sensor_calibration_and_mapout.md```.
 2. **Connection:** Connect the ESP32 and USB Camera to the Raspberry Pi 5 via USB ports .
 3. **Networking:** Power on the Pi. It is configured to broadcast an ad-hoc network: ```AI_Surveillance_Edge```.
 
