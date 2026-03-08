@@ -129,7 +129,7 @@ Note: Docker automatically handles hardware passthrough for ```/dev/video0``` an
 
 This project is licensed under the **GNU General Public License v3.0**. 
 
-[cite_start]**Note for users:** This project was developed as a Bachelor's Thesis at **Shah Abdul Latif University**[cite: 4]. While you are encouraged to use and modify the code for educational and open-source purposes, any derivative works must remain open-source under the same license. [cite_start]Commercial use is restricted by the underlying YOLOv8 licensing terms.
+**Note for users:** This project was developed as a Bachelor's Thesis at **Shah Abdul Latif University**. While you are encouraged to use and modify the code for educational and open-source purposes, any derivative works must remain open-source under the same license. Commercial use is restricted by the underlying YOLOv8 licensing terms.
 
 ## ⚠️ Disclaimer
 
