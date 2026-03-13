@@ -67,7 +67,7 @@ Before starting, ensure you have the following installed on your development mac
 ### 4. Backend & AI Engine Setup
 ```
 # Clone the repository
-git clone https://github.com/umairyousif239/Talos-SentinelF.git
+git clone https://github.com/umairyousif239/Talos-Sentinel.git
 cd Talos-Sentinel
 
 # Create and activate virtual environment
