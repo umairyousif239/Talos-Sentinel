@@ -1,5 +1,18 @@
 {
     "cSpell.words": [
         "conlist"
-    ]
+    ],
+
+    "claudeCode.environmentVariables": [
+    {
+        "name": "ANTHROPIC_BASE_URL",
+        "value": "http://localhost:11434" // Use your server's address/port
+    },
+    {
+        "name": "ANTHROPIC_AUTH_TOKEN",
+        "value": "ollama" // Or "lmstudio" or a dummy value
+    }
+    ],
+    "claudeCode.disableLoginPrompt": true
+
 }
